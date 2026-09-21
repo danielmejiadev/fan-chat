@@ -50,7 +50,7 @@ export function MessageInput({ onSend, onOpenGift }: MessageInputProps) {
           <TextInput
             value={draftText}
             onChangeText={setDraftText}
-            placeholder="Placeholder"
+            placeholder="Type a message"
             placeholderTextColor="#737373"
             maxLength={MESSAGE_CHARACTER_LIMIT}
             className="flex-1 text-body text-foreground-primary"
@@ -71,10 +71,10 @@ export function MessageInput({ onSend, onOpenGift }: MessageInputProps) {
         />
       </View>
       <View className="flex-row items-center">
-        <Text className="text-caption leading-3 text-foreground-secondary">
+        <Text className="text-caption text-foreground-secondary">
           {draftText.length}/{MESSAGE_CHARACTER_LIMIT}
         </Text>
-        <Text className="flex-1 text-right text-caption leading-3 text-foreground-secondary">
+        <Text className="flex-1 text-right text-caption text-foreground-secondary">
           Available messages: Unlimited
         </Text>
       </View>

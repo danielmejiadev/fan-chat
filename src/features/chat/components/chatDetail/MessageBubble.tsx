@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { Avatar } from "@/components/ui/Avatar";
 import { Text } from "@/components/ui/Text";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
-import { GiftRow } from "@/features/chat/components/GiftRow";
+import { GiftRow } from "@/features/chat/components/chatDetail/GiftRow";
 import { MessageStatus, type ThreadMessage } from "@/features/chat/types";
 
 const GIFT_MESSAGE_PATTERN = /sent a \$[\d.]+ gift/i;
@@ -49,7 +49,7 @@ export function MessageBubble({
           {!isGiftMessage && (
             <Text className="text-body text-foreground-primary">{threadMessage.message.text}</Text>
           )}
-          <Text className="mt-2.5 text-caption leading-3 text-foreground-secondary">
+          <Text className="mt-2.5 text-caption text-foreground-date">
             {format(threadMessage.message.createdAt, "h:mm a")}
           </Text>
         </View>

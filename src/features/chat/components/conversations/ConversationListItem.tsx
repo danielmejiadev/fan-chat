@@ -40,13 +40,10 @@ export function ConversationListItem({
           <Text className="text-primary">{conversation.participantHandle}</Text>
         </Text>
         <View className="flex-row items-center gap-3">
-          <Text
-            className="flex-1 text-caption leading-3 text-foreground-secondary"
-            numberOfLines={1}
-          >
+          <Text className="flex-1 text-caption text-foreground-secondary" numberOfLines={1}>
             {conversation.lastMessagePreview}
           </Text>
-          <Text className="text-caption leading-3 text-foreground-secondary">
+          <Text className="text-caption text-foreground-secondary">
             · {formatDistanceToNowStrict(conversation.lastMessageAt, { addSuffix: true })}
           </Text>
         </View>
