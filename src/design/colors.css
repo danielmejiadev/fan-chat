@@ -23,23 +23,23 @@
 
   /* surfaces */
   --color-background: 238 238 238; /* #EEEEEE, app canvas */
-  --color-background-foreground: 24 24 27; /* #18181B, same as text-primary */
+  --color-background-foreground: 24 24 27; /* #18181B, same as foreground-primary */
   --color-surface: 255 255 255; /* #FFFFFF, panels/cards */
   --color-surface-foreground: 24 24 27; /* #18181B */
   --color-surface-muted: 245 245 245; /* #F5F5F5 */
-  --color-surface-muted-foreground: 113 113 122; /* #71717A, same as text-secondary */
+  --color-surface-muted-foreground: 113 113 122; /* #71717A, same as foreground-secondary */
 
   /* borders */
   --color-border: 228 228 231; /* #E4E4E7 */
   --color-border-light: 229 229 229; /* #E5E5E5 */
 
   /* text */
-  --color-text-primary: 24 24 27; /* #18181B */
-  --color-text-secondary: 113 113 122; /* #71717A */
-  --color-text-muted: 115 115 115; /* #737373 */
-  --color-text-zinc: 63 63 70; /* #3F3F46 */
-  --color-text-ink: 10 10 10; /* #0A0A0A */
-  --color-text-date: 82 82 91; /* #52525B */
+  --color-foreground-primary: 24 24 27; /* #18181B */
+  --color-foreground-secondary: 113 113 122; /* #71717A */
+  --color-foreground-muted: 115 115 115; /* #737373 */
+  --color-foreground-zinc: 63 63 70; /* #3F3F46 */
+  --color-foreground-ink: 10 10 10; /* #0A0A0A */
+  --color-foreground-date: 82 82 91; /* #52525B */
 
   /* status */
   --color-online: 22 163 74; /* #16A34A */
@@ -55,7 +55,45 @@
   --color-bubble-received-foreground: 24 24 27; /* #18181B, received-message text */
 }
 
-.dark {
-  /* TODO: no dark-mode reference in the Figma yet — stays equal to light
-     until real values exist. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* No dark-mode reference in the Figma; values below are a reasonable
+       inversion of the light tokens (zinc-900/800 surfaces), not sourced
+       from a design file. */
+    --color-primary-foreground: 255 255 255;
+    --color-ring: 149 156 234; /* --color-primary-300, more visible on dark */
+
+    /* surfaces */
+    --color-background: 24 24 27; /* #18181B, zinc-900 */
+    --color-background-foreground: 244 244 245; /* #F4F4F5, zinc-100 */
+    --color-surface: 39 39 42; /* #27272A, zinc-800 */
+    --color-surface-foreground: 244 244 245; /* #F4F4F5 */
+    --color-surface-muted: 63 63 70; /* #3F3F46, zinc-700 */
+    --color-surface-muted-foreground: 161 161 170; /* #A1A1AA, zinc-400 */
+
+    /* borders */
+    --color-border: 63 63 70; /* #3F3F46, zinc-700 */
+    --color-border-light: 82 82 91; /* #52525B, zinc-600 */
+
+    /* text */
+    --color-foreground-primary: 244 244 245; /* #F4F4F5 */
+    --color-foreground-secondary: 161 161 170; /* #A1A1AA */
+    --color-foreground-muted: 161 161 170; /* #A1A1AA */
+    --color-foreground-zinc: 212 212 216; /* #D4D4D8 */
+    --color-foreground-ink: 250 250 250; /* #FAFAFA */
+    --color-foreground-date: 161 161 170; /* #A1A1AA */
+
+    /* status */
+    --color-online: 34 197 94; /* #22C55E, brighter on dark */
+    --color-offline: 113 113 122; /* #71717A */
+    --color-away: 82 82 91; /* #52525B */
+    --color-error: 248 113 113; /* #F87171, brighter on dark */
+    --color-error-foreground: 24 24 27; /* #18181B */
+
+    /* misc */
+    --color-highlight: 43 43 74; /* dark tint of primary */
+    --color-highlight-foreground: 149 156 234; /* --color-primary-300 */
+    --color-bubble-received: 39 39 42; /* #27272A, zinc-800 */
+    --color-bubble-received-foreground: 244 244 245; /* #F4F4F5 */
+  }
 }

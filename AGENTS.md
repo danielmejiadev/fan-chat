@@ -170,9 +170,12 @@ level — never duplicated per module.
   `tailwind.config.js` — never hardcode colors inside a component's
   `className`.
 - **Dynamic theming (accent color, dark mode) always through NativeWind's
-  theme/tokens**, never hardcoded colors per component. Dark mode uses
-  NativeWind's `dark:` variant (`darkMode: "class"` in
-  `tailwind.config.js`).
+  theme/tokens**, never hardcoded colors per component. Dark mode follows
+  the OS automatically via NativeWind's `dark:` variant (`darkMode: "media"`
+  in `tailwind.config.js`) — no manual toggle in-app, no `useColorScheme`
+  syncing needed. Switching to `"class"` would require wiring that sync
+  back in (see git history for `useSyncColorScheme` if a manual toggle is
+  ever needed).
 - Never component-specific styling inside `tailwind.config.js` or
   `global.css` — that goes with the component (utility classes in JSX).
 

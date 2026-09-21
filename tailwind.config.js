@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: "class",
+  darkMode: "media",
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
   presets: [require("nativewind/preset")],
   theme: {
@@ -36,12 +36,12 @@ module.exports = {
           DEFAULT: "rgb(var(--color-border) / <alpha-value>)",
           light: "rgb(var(--color-border-light) / <alpha-value>)",
         },
-        "text-primary": "rgb(var(--color-text-primary) / <alpha-value>)",
-        "text-secondary": "rgb(var(--color-text-secondary) / <alpha-value>)",
-        "text-muted": "rgb(var(--color-text-muted) / <alpha-value>)",
-        "text-zinc": "rgb(var(--color-text-zinc) / <alpha-value>)",
-        "text-ink": "rgb(var(--color-text-ink) / <alpha-value>)",
-        "text-date": "rgb(var(--color-text-date) / <alpha-value>)",
+        "foreground-primary": "rgb(var(--color-foreground-primary) / <alpha-value>)",
+        "foreground-secondary": "rgb(var(--color-foreground-secondary) / <alpha-value>)",
+        "foreground-muted": "rgb(var(--color-foreground-muted) / <alpha-value>)",
+        "foreground-zinc": "rgb(var(--color-foreground-zinc) / <alpha-value>)",
+        "foreground-ink": "rgb(var(--color-foreground-ink) / <alpha-value>)",
+        "foreground-date": "rgb(var(--color-foreground-date) / <alpha-value>)",
         online: "rgb(var(--color-online) / <alpha-value>)",
         offline: "rgb(var(--color-offline) / <alpha-value>)",
         away: "rgb(var(--color-away) / <alpha-value>)",
@@ -59,15 +59,33 @@ module.exports = {
         },
       },
       fontFamily: {
-        // Geist isn't actually loaded yet (no expo-font/useFonts call) — this
-        // falls back to the system stack until that's wired up.
-        sans: [
-          "Geist",
-          "-apple-system",
-          "System",
-          "Roboto",
-          "sans-serif",
-        ],
+        // React Native can't fake a font-weight on a custom font the way a
+        // browser can — each weight is its own loaded font file, referenced
+        // by its exact name (loaded via useFonts in src/app/_layout.tsx).
+        // Pair a weight class with a text-* size below, e.g.
+        // `text-h4 font-sans-medium`, never rely on font-medium/font-semibold
+        // alone to pick the right Geist weight. A single string, not an
+        // array — NativeWind only reads the first entry of a fontFamily
+        // array on native, so a fallback list here would be dead weight.
+        sans: "Geist_400Regular",
+        "sans-medium": "Geist_500Medium",
+        "sans-semibold": "Geist_600SemiBold",
+      },
+      fontSize: {
+        // Type scale — named by role, not raw size, so a component reads
+        // `text-h4`/`text-body`/`text-caption` instead of guessing a
+        // px value. h4/body/caption values are the exact sizes already
+        // confirmed from the Figma guides; h1–h3/h5 extend the same scale
+        // for screens the Figma doesn't cover yet (settings, onboarding, …).
+        // Always pair with a font-sans*/font-sans-medium/font-sans-semibold
+        // weight class — see the fontFamily comment above.
+        h1: ["24px", { lineHeight: "32px" }],
+        h2: ["20px", { lineHeight: "28px" }],
+        h3: ["18px", { lineHeight: "24px" }],
+        h4: ["16px", { lineHeight: "24px" }], // matches the existing text-base usage (desktop "Chats" header, modal titles)
+        h5: ["14px", { lineHeight: "20px" }], // matches the existing text-sm font-semibold usage (participant name)
+        body: ["14px", { lineHeight: "20px" }], // matches the existing text-sm usage (message text, most UI copy)
+        caption: ["12px", { lineHeight: "16px" }], // matches the existing text-xs usage (timestamps, metadata)
       },
       boxShadow: {
         xs: "0px 1px 2px rgba(0, 0, 0, 0.05)",
