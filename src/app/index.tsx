@@ -1,9 +1,20 @@
-import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { View } from "react-native";
 
-export default function HomeScreen() {
+import { ChatListHeader } from "@/features/chat/components/ChatListHeader";
+import { ConversationsList } from "@/features/chat/components/ConversationsList";
+
+export default function ChatListScreen() {
+  const router = useRouter();
+
+  const handleSelectConversation = (conversationId: string) => {
+    router.push({ pathname: "/chat/[conversationId]", params: { conversationId } });
+  };
+
   return (
-    <View className="flex-1 items-center justify-center bg-white dark:bg-neutral-950">
-      <Text className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Hello World</Text>
+    <View className="flex-1 pt-16 bg-canvas">
+      <ChatListHeader />
+      <ConversationsList onSelectConversation={handleSelectConversation} />
     </View>
   );
 }
