@@ -11,50 +11,8 @@ import {
   ResponseLostError,
   type MockChatBackend,
 } from "@/features/chat/services/mockChatBackend";
-import type { ChatStore } from "@/features/chat/storage/chatStore";
-import { MessageStatus, type ClientMessage, type ServerMessage } from "@/features/chat/types";
-
-function createInMemoryChatStore(): ChatStore {
-  const pendingMessages = new Map<string, ClientMessage>();
-  const acceptedClientIds = new Map<string, string>();
-  const messages = new Map<string, ServerMessage>();
-
-  return {
-    insertPendingMessage(message) {
-      pendingMessages.set(message.clientId, message);
-    },
-    updatePendingMessageStatus(clientId, status) {
-      const existing = pendingMessages.get(clientId);
-      if (existing !== undefined) {
-        pendingMessages.set(clientId, { ...existing, status });
-      }
-    },
-    deletePendingMessage(clientId) {
-      pendingMessages.delete(clientId);
-    },
-    getPendingMessages(conversationId) {
-      return Array.from(pendingMessages.values())
-        .filter((message) => message.conversationId === conversationId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-    },
-    isClientIdAccepted(clientId) {
-      return acceptedClientIds.has(clientId);
-    },
-    recordAcceptedClientId(clientId, serverId) {
-      acceptedClientIds.set(clientId, serverId);
-    },
-    insertMessage(message) {
-      if (!messages.has(message.serverId)) {
-        messages.set(message.serverId, message);
-      }
-    },
-    getThreadMessages(conversationId) {
-      return Array.from(messages.values())
-        .filter((message) => message.conversationId === conversationId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-    },
-  };
-}
+import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
+import { MessageStatus, type ServerMessage } from "@/features/chat/types";
 
 /**
  * Wraps a MockChatBackend so the first submission for each listed clientId

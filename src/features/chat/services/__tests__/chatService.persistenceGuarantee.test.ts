@@ -1,7 +1,8 @@
 import { enqueueMessage, flushPendingMessages } from "@/features/chat/services/chatService";
 import { createMockChatBackend } from "@/features/chat/services/mockChatBackend";
+import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
-import type { ClientMessage, ServerMessage } from "@/features/chat/types";
+import type { ClientMessage } from "@/features/chat/types";
 
 /**
  * expo-sqlite is a native module — Jest runs in Node and cannot execute it —
@@ -18,45 +19,27 @@ import type { ClientMessage, ServerMessage } from "@/features/chat/types";
  * data in. This suite pins that ordering down with a call-order spy, not a
  * simulated restart.
  */
+/**
+ * Wraps the shared in-memory ChatStore, instrumenting only the calls these
+ * tests assert on. Delegating the rest avoids re-implementing the full
+ * ChatStore contract a third time just to track call order.
+ */
 function createCallOrderSpyStore(callOrder: string[]): ChatStore {
-  const pendingMessages = new Map<string, ClientMessage>();
-  const messages = new Map<string, ServerMessage>();
-  const acceptedClientIds = new Map<string, string>();
+  const store = createInMemoryChatStore();
 
   return {
-    insertPendingMessage(message) {
+    ...store,
+    insertPendingMessage(message: ClientMessage) {
       callOrder.push("store:insertPendingMessage");
-      pendingMessages.set(message.clientId, message);
+      store.insertPendingMessage(message);
     },
     updatePendingMessageStatus(clientId, status) {
       callOrder.push("store:updatePendingMessageStatus");
-      const existing = pendingMessages.get(clientId);
-      if (existing !== undefined) {
-        pendingMessages.set(clientId, { ...existing, status });
-      }
+      store.updatePendingMessageStatus(clientId, status);
     },
     deletePendingMessage(clientId) {
       callOrder.push("store:deletePendingMessage");
-      pendingMessages.delete(clientId);
-    },
-    getPendingMessages(conversationId) {
-      return Array.from(pendingMessages.values())
-        .filter((message) => message.conversationId === conversationId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-    },
-    isClientIdAccepted(clientId) {
-      return acceptedClientIds.has(clientId);
-    },
-    recordAcceptedClientId(clientId, serverId) {
-      acceptedClientIds.set(clientId, serverId);
-    },
-    insertMessage(message) {
-      messages.set(message.serverId, message);
-    },
-    getThreadMessages(conversationId) {
-      return Array.from(messages.values()).filter(
-        (message) => message.conversationId === conversationId,
-      );
+      store.deletePendingMessage(clientId);
     },
   };
 }

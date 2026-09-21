@@ -209,11 +209,20 @@ propio AGENTS.md ("Business rules live here").
 
 ## Fase 3 — Datos a escala y performance (funcional, sin UI)
 
-- [ ] Generar 50,000 mensajes mock repetibles (seed fija) en SQLite.
-- [ ] Carga con paginación (ventaneo) + FlashList.
+- [x] Generar 50,000 mensajes mock repetibles (seed fija) en SQLite.
+  `generatePerfTestMessages.ts` (PRNG mulberry32 con seed 42, timestamp de
+  referencia fijo) + `ensurePerfTestMessagesSeeded()` (idempotente, no
+  resiembra si ya están los 50k) para `conversationId = "perf-test"`.
+- [x] `ChatStore.getThreadMessagesPage` — paginación keyset por
+  `(createdAt, serverId)`, implementada en SQLite y en el fake en memoria,
+  verificada con test dedicado paginando los 50k reales sin huecos ni
+  duplicados (`chatStorePagination.test.ts`).
+- [ ] Carga con paginación + FlashList **en la UI**: falta exponer la
+  paginación desde `chatService`/`useChatThread` y armar la pantalla mínima
+  (sin estilos) que la consuma — solo existe a nivel de storage/tests hoy.
 - [ ] Definir secuencia repetible de scroll + tipeo para perfilar después
   (guion fijo: scroll rápido al fondo, scroll lento leyendo, escribir en el
-  input mientras se hace scroll).
+  input mientras se hace scroll) — depende de que exista la pantalla.
 
 ## Fase 4 — UI/UX/estilos (al final)
 

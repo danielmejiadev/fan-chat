@@ -1,5 +1,5 @@
 import { getDatabase } from "@/lib/database";
-import type { ChatStore } from "@/features/chat/storage/chatStore";
+import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
 import type { ClientMessage, MessageStatus, ServerMessage } from "@/features/chat/types";
 
 /**
@@ -124,6 +124,66 @@ export function createSqliteChatStore(): ChatStore {
          WHERE conversationId = $conversationId
          ORDER BY createdAt ASC`,
         { $conversationId: conversationId },
+      );
+    },
+
+    insertMessages(messages: ServerMessage[]): void {
+      database.withTransactionSync(() => {
+        for (const message of messages) {
+          database.runSync(
+            `INSERT OR IGNORE INTO messages (serverId, clientId, conversationId, senderId, text, createdAt)
+             VALUES ($serverId, $clientId, $conversationId, $senderId, $text, $createdAt)`,
+            {
+              $serverId: message.serverId,
+              $clientId: message.clientId,
+              $conversationId: message.conversationId,
+              $senderId: message.senderId,
+              $text: message.text,
+              $createdAt: message.createdAt,
+            },
+          );
+        }
+      });
+    },
+
+    countMessages(conversationId: string): number {
+      const row = database.getFirstSync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM messages WHERE conversationId = $conversationId`,
+        { $conversationId: conversationId },
+      );
+
+      return row?.count ?? 0;
+    },
+
+    getThreadMessagesPage(
+      conversationId: string,
+      options: { limit: number; before?: MessagePageCursor },
+    ): ServerMessage[] {
+      if (options.before === undefined) {
+        return database.getAllSync<ServerMessage>(
+          `SELECT serverId, clientId, conversationId, senderId, text, createdAt
+           FROM messages
+           WHERE conversationId = $conversationId
+           ORDER BY createdAt DESC, serverId DESC
+           LIMIT $limit`,
+          { $conversationId: conversationId, $limit: options.limit },
+        );
+      }
+
+      return database.getAllSync<ServerMessage>(
+        `SELECT serverId, clientId, conversationId, senderId, text, createdAt
+         FROM messages
+         WHERE conversationId = $conversationId
+           AND (createdAt < $beforeCreatedAt
+                OR (createdAt = $beforeCreatedAt AND serverId < $beforeServerId))
+         ORDER BY createdAt DESC, serverId DESC
+         LIMIT $limit`,
+        {
+          $conversationId: conversationId,
+          $beforeCreatedAt: options.before.createdAt,
+          $beforeServerId: options.before.serverId,
+          $limit: options.limit,
+        },
       );
     },
   };
