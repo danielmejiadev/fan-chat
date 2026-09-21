@@ -1,0 +1,47 @@
+import { Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { clsx } from "clsx";
+
+import { Icon } from "@/components/Icon";
+
+const DEFAULT_BG_CLASSNAME = {
+  ghost: "bg-transparent",
+  muted: "bg-surface-muted shadow-inset-primary",
+  primary: "bg-primary border border-primary shadow-inset-xs",
+  gift: "bg-surface-muted shadow-inset-primary",
+};
+
+const DEFAULT_ICON_CLASSNAME = {
+  ghost: "text-foreground-primary",
+  muted: "text-ring",
+  primary: "text-[#FAFAFA]",
+  gift: "text-ring",
+};
+
+interface IconButtonProps {
+  name: keyof typeof Ionicons.glyphMap;
+  onPress?: () => void;
+  accessibilityLabel: string;
+  variant?: "ghost" | "muted" | "primary" | "gift";
+}
+
+export function IconButton({
+  name,
+  onPress,
+  accessibilityLabel,
+  variant = "ghost",
+}: IconButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      className={clsx(
+        "h-9 w-9 items-center justify-center rounded-[10px]",
+        DEFAULT_BG_CLASSNAME[variant],
+      )}
+    >
+      <Icon name={name} size={16} className={DEFAULT_ICON_CLASSNAME[variant]} />
+    </Pressable>
+  );
+}
