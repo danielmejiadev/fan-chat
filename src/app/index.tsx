@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/Text";
-import { Conversations } from "@/features/chat/components/Conversations";
+import { Conversations } from "@/features/chat/components/conversations/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";

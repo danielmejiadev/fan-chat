@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { View } from "react-native";
 
-import { ChatListHeader } from "@/features/chat/components/ChatListHeader";
-import { ConversationListView } from "@/features/chat/components/ConversationListView";
-import { ConversationSearch } from "@/features/chat/components/ConversationSearch";
+import { ChatListHeader } from "@/features/chat/components/conversations/ChatListHeader";
+import { ConversationListView } from "@/features/chat/components/conversations/ConversationListView";
+import { ConversationSearch } from "@/features/chat/components/conversations/ConversationSearch";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
 interface ConversationsProps {

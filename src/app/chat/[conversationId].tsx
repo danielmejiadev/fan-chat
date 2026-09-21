@@ -1,9 +1,9 @@
 import { useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
-import { Conversations } from "@/features/chat/components/Conversations";
+import { Conversations } from "@/features/chat/components/conversations/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
-import { ThreadPane } from "@/features/chat/components/ThreadPane";
+import { ThreadPane } from "@/features/chat/components/chatDetail/ThreadPane";
 
 export default function ChatThreadScreen() {
   const isDesktop = useIsDesktopLayout();

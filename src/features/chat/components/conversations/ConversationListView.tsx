@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
 
-import { ConversationListItem } from "@/features/chat/components/ConversationListItem";
+import { ConversationListItem } from "@/features/chat/components/conversations/ConversationListItem";
 import { MOCK_CONVERSATIONS, type Conversation } from "@/features/chat/constants/mockConversations";
 import { filterConversations } from "@/features/chat/utils/filterConversations";
 

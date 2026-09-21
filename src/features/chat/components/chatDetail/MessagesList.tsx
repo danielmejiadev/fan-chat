@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 
 import { Text } from "@/components/ui/Text";
-import { MessageBubble } from "@/features/chat/components/MessageBubble";
+import { MessageBubble } from "@/features/chat/components/chatDetail/MessageBubble";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
 import type { ThreadMessage } from "@/features/chat/types";
 

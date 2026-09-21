@@ -3,10 +3,10 @@ import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/Text";
-import { ChatThreadHeader } from "@/features/chat/components/ChatThreadHeader";
-import { MessageInput } from "@/features/chat/components/MessageInput";
-import { MessagesList } from "@/features/chat/components/MessagesList";
-import { OfflineBanner } from "@/features/chat/components/OfflineBanner";
+import { ChatThreadHeader } from "@/features/chat/components/chatDetail/ChatThreadHeader";
+import { MessageInput } from "@/features/chat/components/chatDetail/MessageInput";
+import { MessagesList } from "@/features/chat/components/chatDetail/MessagesList";
+import { OfflineBanner } from "@/features/chat/components/chatDetail/OfflineBanner";
 import { CURRENT_FAN_ID, getConversationById } from "@/features/chat/constants/mockConversations";
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import { ensureDemoConversationSeeded } from "@/features/chat/services/demoConversationSeed";
