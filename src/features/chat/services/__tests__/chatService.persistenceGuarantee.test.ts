@@ -62,11 +62,11 @@ describe("chatService persistence guarantee (precondition for force-quit recover
     const store = createCallOrderSpyStore(callOrder);
     const realBackend = createMockChatBackend();
     const spiedBackend = {
+      ...realBackend,
       submitMessage(message: ClientMessage, submitterId: string) {
         callOrder.push("backend:submitMessage");
         return realBackend.submitMessage(message, submitterId);
       },
-      listMessages: realBackend.listMessages,
     };
 
     enqueueMessage(conversationId, "hello", store);

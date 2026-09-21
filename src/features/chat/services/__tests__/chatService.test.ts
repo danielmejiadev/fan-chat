@@ -27,6 +27,7 @@ function createResponseDroppingBackend(
   const pending = new Set(dropOnceFor);
 
   return {
+    ...backend,
     submitMessage(message, senderId, options) {
       if (pending.has(message.clientId)) {
         pending.delete(message.clientId);
@@ -35,9 +36,6 @@ function createResponseDroppingBackend(
       }
 
       return backend.submitMessage(message, senderId, options);
-    },
-    listMessages(conversationId) {
-      return backend.listMessages(conversationId);
     },
   };
 }
@@ -174,6 +172,9 @@ describe("chatService failure handling", () => {
       },
       listMessages() {
         return [];
+      },
+      receiveIncomingMessage() {
+        throw new Error("not used in this test");
       },
     };
 

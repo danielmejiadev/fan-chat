@@ -102,6 +102,21 @@ export function getConfirmedThread(conversationId: string, store?: ChatStore): S
   return resolveStore(store).getThreadMessages(conversationId);
 }
 
+/**
+ * The newest `limit` confirmed messages. Grows the window instead of
+ * accumulating cursor pages — simpler to keep correct while the thread also
+ * gets new messages from reconciliation, at the cost of re-reading the whole
+ * window on every call. Fine at this scale; worth revisiting in Phase 5 if
+ * profiling shows it's the bottleneck on the 50k-message conversation.
+ */
+export function getThreadWindow(
+  conversationId: string,
+  limit: number,
+  store?: ChatStore,
+): ServerMessage[] {
+  return resolveStore(store).getThreadMessagesPage(conversationId, { limit });
+}
+
 export function getPendingMessages(conversationId: string, store?: ChatStore): ClientMessage[] {
   return resolveStore(store).getPendingMessages(conversationId);
 }

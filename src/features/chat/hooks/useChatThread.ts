@@ -5,8 +5,8 @@ import { getConversationBackend } from "@/features/chat/services/chatBackendRegi
 import {
   enqueueMessage,
   flushPendingMessages,
-  getConfirmedThread,
   getPendingMessages,
+  getThreadWindow,
   syncThread,
 } from "@/features/chat/services/chatService";
 import type { MockChatBackend } from "@/features/chat/services/mockChatBackend";
@@ -15,11 +15,15 @@ import { MessageStatus, type ThreadMessage } from "@/features/chat/types";
 import { mergeThreadMessages } from "@/features/chat/utils/mergeThreadMessages";
 
 const RECONCILE_INTERVAL_MS = 5000;
+const INITIAL_WINDOW_SIZE = 30;
+const WINDOW_SIZE_STEP = 30;
 
 export type UseChatThreadResult = {
   messages: ThreadMessage[];
   sendMessage: (text: string) => void;
   retryMessage: (clientId: string) => void;
+  loadOlderMessages: () => void;
+  hasMoreOlderMessages: boolean;
   isOffline: boolean;
 };
 
@@ -48,29 +52,65 @@ export function useChatThread(
   const registryBackend = useMemo(() => getConversationBackend(conversationId), [conversationId]);
   const backend = backendOverride ?? registryBackend;
 
-  const readMessages = useCallback(
-    () =>
-      mergeThreadMessages(
-        getConfirmedThread(conversationId, store),
-        getPendingMessages(conversationId, store),
-      ),
+  const [windowSize, setWindowSize] = useState(INITIAL_WINDOW_SIZE);
+
+  const readConfirmedWindow = useCallback(
+    (size: number) => getThreadWindow(conversationId, size, store),
     [conversationId, store],
   );
 
-  const [messages, setMessages] = useState<ThreadMessage[]>(readMessages);
+  const readMessages = useCallback(
+    (size: number) =>
+      mergeThreadMessages(readConfirmedWindow(size), getPendingMessages(conversationId, store)),
+    [readConfirmedWindow, conversationId, store],
+  );
 
-  // Reset the thread when conversationId (or its store) changes, without an
-  // effect: this is React's documented "adjusting state during render"
-  // pattern for deriving state from a changed prop, not a setState-in-effect.
+  const [messages, setMessages] = useState<ThreadMessage[]>(() => readMessages(windowSize));
+  // Heuristic: a full window might mean there's more history to load; a
+  // short one means we've reached the start of the thread. loadOlderMessages
+  // grows the window and this gets recomputed on the next read.
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(
+    () => readConfirmedWindow(windowSize).length >= windowSize,
+  );
+
+  // Re-reads when conversationId (a new thread), windowSize (loadOlderMessages),
+  // or store changes — React's documented "adjusting state during render"
+  // pattern for deriving state from changed props/state, not a setState-in-effect.
   const [renderedConversationId, setRenderedConversationId] = useState(conversationId);
-  if (renderedConversationId !== conversationId) {
+  const [renderedWindowSize, setRenderedWindowSize] = useState(windowSize);
+  const [renderedStore, setRenderedStore] = useState(store);
+  if (
+    renderedConversationId !== conversationId ||
+    renderedWindowSize !== windowSize ||
+    renderedStore !== store
+  ) {
+    const conversationChanged = renderedConversationId !== conversationId;
+    const effectiveWindowSize = conversationChanged ? INITIAL_WINDOW_SIZE : windowSize;
+
     setRenderedConversationId(conversationId);
-    setMessages(readMessages());
+    setRenderedWindowSize(effectiveWindowSize);
+    setRenderedStore(store);
+    if (conversationChanged && windowSize !== INITIAL_WINDOW_SIZE) {
+      setWindowSize(INITIAL_WINDOW_SIZE);
+    }
+
+    const confirmedWindow = readConfirmedWindow(effectiveWindowSize);
+    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId, store)));
+    setHasMoreOlderMessages(confirmedWindow.length >= effectiveWindowSize);
   }
 
   const refreshMessages = useCallback(() => {
-    setMessages(readMessages());
-  }, [readMessages]);
+    const confirmedWindow = readConfirmedWindow(windowSize);
+    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId, store)));
+    setHasMoreOlderMessages(confirmedWindow.length >= windowSize);
+  }, [readConfirmedWindow, conversationId, store, windowSize]);
+
+  const loadOlderMessages = useCallback(() => {
+    if (!hasMoreOlderMessages) {
+      return;
+    }
+    setWindowSize((currentWindowSize) => currentWindowSize + WINDOW_SIZE_STEP);
+  }, [hasMoreOlderMessages]);
 
   const reconcile = useCallback(() => {
     flushPendingMessages(backend, conversationId, senderId, store);
@@ -136,5 +176,12 @@ export function useChatThread(
       threadMessage.origin === "client" && threadMessage.message.status === MessageStatus.Failed,
   );
 
-  return { messages, sendMessage, retryMessage, isOffline };
+  return {
+    messages,
+    sendMessage,
+    retryMessage,
+    loadOlderMessages,
+    hasMoreOlderMessages,
+    isOffline,
+  };
 }

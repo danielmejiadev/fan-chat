@@ -26,6 +26,12 @@ export type MockChatBackend = {
    * reconciles against this list, e.g. on reconnect.
    */
   listMessages: (conversationId: string) => ServerMessage[];
+  /**
+   * Simulates the other participant sending a message — there is no
+   * clientId because it did not originate on this device. Only visible to a
+   * client after its next syncThread, same as any other backend-side change.
+   */
+  receiveIncomingMessage: (conversationId: string, senderId: string, text: string) => ServerMessage;
 };
 
 /**
@@ -67,6 +73,21 @@ export function createMockChatBackend(dedupeByClientId: boolean = true): MockCha
 
     listMessages(conversationId) {
       return messages.filter((message) => message.conversationId === conversationId);
+    },
+
+    receiveIncomingMessage(conversationId, senderId, text) {
+      const serverMessage: ServerMessage = {
+        serverId: `srv_${nextServerId++}`,
+        clientId: null,
+        conversationId,
+        senderId,
+        text,
+        createdAt: Date.now(),
+      };
+
+      messages.push(serverMessage);
+
+      return serverMessage;
     },
   };
 }

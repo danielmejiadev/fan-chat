@@ -51,6 +51,9 @@ describe("useChatThread", () => {
         return serverMessage;
       },
       listMessages: () => [],
+      receiveIncomingMessage: () => {
+        throw new Error("not used in this test");
+      },
     };
 
     const { result } = await renderHook(() =>
@@ -80,5 +83,36 @@ describe("useChatThread", () => {
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].origin).toBe("server");
+  });
+
+  it("loads the newest window first, then grows it on loadOlderMessages", async () => {
+    const store = createInMemoryChatStore();
+    const totalMessages = 45;
+    store.insertMessages(
+      Array.from({ length: totalMessages }, (_, index) => ({
+        serverId: `srv_${index}`,
+        clientId: null,
+        conversationId,
+        senderId: "creator-1",
+        text: `message ${index}`,
+        createdAt: index * 1000,
+      })),
+    );
+
+    const { result } = await renderHook(() => useChatThread(conversationId, senderId, store));
+
+    expect(result.current.messages).toHaveLength(30);
+    expect(result.current.hasMoreOlderMessages).toBe(true);
+    // Newest-first window, then re-sorted chronologically: the oldest
+    // message visible should be the 16th (index 15), not index 0.
+    expect(result.current.messages[0].message.text).toBe("message 15");
+
+    await act(() => {
+      result.current.loadOlderMessages();
+    });
+
+    expect(result.current.messages).toHaveLength(totalMessages);
+    expect(result.current.hasMoreOlderMessages).toBe(false);
+    expect(result.current.messages[0].message.text).toBe("message 0");
   });
 });
