@@ -6,16 +6,14 @@ import { ConversationListItem } from "@/features/chat/components/ConversationLis
 import { ConversationSearch } from "@/features/chat/components/ConversationSearch";
 import { MOCK_CONVERSATIONS, type Conversation } from "@/features/chat/constants/mockConversations";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
+import { useRouter } from "expo-router";
 
 interface ConversationsListProps {
-  selectedConversationId?: string;
-  onSelectConversation: (conversationId: string) => void;
+  conversationId?: string;
 }
 
-export function ConversationsList({
-  selectedConversationId,
-  onSelectConversation,
-}: ConversationsListProps) {
+export function ConversationsList({ conversationId }: ConversationsListProps) {
+  const router = useRouter();
   const isDesktop = useIsDesktopLayout();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -34,6 +32,10 @@ export function ConversationsList({
     });
   }, [searchQuery]);
 
+  const selectConversation = (conversationId: string) => {
+    router.push({ pathname: "/chat/[conversationId]", params: { conversationId } });
+  };
+
   return (
     <View className="flex-1 bg-surface">
       <ChatListHeader searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
@@ -50,8 +52,8 @@ export function ConversationsList({
           renderItem={({ item: conversation }) => (
             <ConversationListItem
               conversation={conversation}
-              isSelected={conversation.id === selectedConversationId}
-              onPress={onSelectConversation}
+              isSelected={conversation.id === conversationId}
+              onPress={selectConversation}
             />
           )}
         />
