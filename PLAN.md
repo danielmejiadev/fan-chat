@@ -78,12 +78,17 @@ reintentos).
   `loadOlderMessages` (ventana creciente), reconciliación periódica (5s) +
   al volver a foreground (`AppState`). Cubierto por
   `hooks/__tests__/useChatThread.test.ts`.
-- [x] **UI conectada**: `ChatWorkspace` (lista + thread, responsive
-  desktop/mobile) → `ConversationsList`, `MessagesList` (FlashList),
-  `MessageBubble`, `MessageInput`, `ChatThreadHeader`, `OfflineBanner`,
-  `ConversationSearch`. Rutas `src/app/index.tsx` y
-  `src/app/chat/[conversationId].tsx` son ahora lite wrappers de
-  `ChatWorkspace`.
+- [x] **UI conectada**: `ChatWorkspace` reemplazado por navegación basada en
+  Expo Router (`src/app/index.tsx` = lista, `src/app/chat/[conversationId].tsx`
+  = thread); cada ruta resuelve su propio layout responsive con
+  `useIsDesktopLayout` (desktop: `DesktopSidebar` + lista (`Conversations`) +
+  `ThreadPane`; mobile: `Conversations`/`ThreadPane` a pantalla completa +
+  `MobileTabBar`). Componentes reorganizados por sub-feature:
+  `features/chat/components/conversations/` (`Conversations`,
+  `ConversationListItem`, `ConversationListView`, `ConversationSearch`,
+  `ChatListHeader`) y `features/chat/components/chatDetail/` (`ThreadPane`,
+  `MessagesList`, `MessageBubble`, `MessageInput`, `ChatThreadHeader`,
+  `GiftRow`, `OfflineBanner`).
 - [ ] Demo seeding (`ensureDemoConversationSeeded`) y flujo completo
   probados a mano end-to-end en Simulator/web tras el fix de SQLite en
   progreso (ver "Work in progress" abajo) — bloqueado por ese bug.
@@ -106,9 +111,9 @@ reintentos).
 - [x] **UI conectada**: `GiftModal` (responsive, elige monto/medio de
   pago, muestra subtotal/fees/total) + `useGiftPurchase` hook
   (`pay`/`reset`, estados `idle/pending/confirmed/failed/canceled`) +
-  `purchaseBackendRegistry.ts`. Disparado desde `MessageInput` →
-  `ThreadPane` en `ChatWorkspace`; al confirmar, inserta un mensaje de
-  sistema en el thread vía `onGiftSent`.
+  `purchaseBackendRegistry.ts`. Disparado desde `MessageInput` → `ThreadPane`
+  (`features/chat/components/chatDetail/`); al confirmar, inserta un mensaje
+  de sistema en el thread vía `onGiftSent`.
 - [ ] Probar a mano el flujo de gift end-to-end en Simulator/web (mismo
   bloqueo que Fase 1: SQLite en progreso).
 - [ ] Para el README: explicar cómo conectaría a billing real (RevenueCat
