@@ -97,22 +97,40 @@ propio AGENTS.md ("Business rules live here").
 
 ## Fase 1 — Mensajería confiable (30%)
 
-- [ ] Reproducir el bug de duplicados (respuesta perdida tras retry) antes
-  de tocar código — documentar el repro en el README.
-- [ ] Persistir mensajes pendientes en SQLite antes de encolarlos.
-  `clientId` estable (UUID generado al crear el mensaje) que sobreviva
-  reinicios de la app.
-- [ ] Mock service recuerda `clientId`s ya aceptados (tabla de
-  idempotencia) separada de la cola del cliente.
-- [ ] Escenarios obligatorios a cubrir con tests/demo:
-  1. 3 mensajes offline quedan en estado "esperando".
-  2. Esos 3 sobreviven un force-quit de la app.
-  3. 4 mensajes entrantes se reconcilian al reconectar sin duplicar.
-  4. Retry de una respuesta perdida deja una sola copia final.
-  5. Fallos claros: texto preservado + botón de retry cuando aplica.
-- [ ] Orden final del thread lo decide el mock (servidor); los salientes
-  mantienen orden local hasta confirmarse.
-- [ ] **Test obligatorio**: recuperación tras reinicio de la app.
+- [x] Reproducir el bug de duplicados (respuesta perdida tras retry) antes
+  de tocar código — test dedicado en `chatService.test.ts` que documenta el
+  repro con un backend mock sin dedupe (`createMockChatBackend(false)`).
+- [x] Persistir mensajes pendientes en SQLite antes de encolarlos.
+  `clientId` estable (UUID generado en `enqueueMessage`) que sobrevive
+  reinicios de la app (persistencia ya implementada; el test de force-quit
+  en sí queda pendiente, ver abajo).
+- [x] Mock backend recuerda `clientId`s ya aceptados (dedupe por
+  `clientId` en `mockChatBackend.ts`, más `accepted_client_ids` en SQLite).
+- [x] `chatService.ts`: `enqueueMessage`, `flushPendingMessages`,
+  `receiveMessages`, `syncThread`, `getConfirmedThread`,
+  `getPendingMessages` — con `ChatStore` inyectable para poder testear la
+  lógica en memoria sin depender del motor nativo de SQLite en Jest.
+- [x] Escenarios obligatorios cubiertos por tests (`chatService.test.ts`,
+  6/6 verdes):
+  1. [x] 3 mensajes offline quedan en estado "esperando" (Pending), en orden.
+  2. [ ] Esos 3 sobreviven un force-quit de la app — **pendiente**: requiere
+     una prueba de integración contra SQLite real (no el store en memoria),
+     ver más abajo.
+  3. [x] 4 mensajes entrantes se reconcilian al reconectar sin duplicar
+     (`receiveMessages` + `syncThread`, idempotentes por `serverId`).
+  4. [x] Retry de una respuesta perdida deja una sola copia final — probado
+     tanto el bug (backend sin dedupe → 2 copias) como el fix (backend con
+     dedupe → 1 copia, incluso con 3 reintentos redundantes).
+  5. [x] Fallos claros: texto preservado + estado Failed para retry manual.
+- [x] Orden final del thread lo decide el mock backend
+  (`listMessages`/`syncThread`); los salientes mantienen orden local en
+  `pending_messages` hasta confirmarse.
+- [ ] **Test obligatorio pendiente**: recuperación tras reinicio de la app
+  contra SQLite real (no el `ChatStore` en memoria de los tests actuales).
+- [ ] Conectar `chatService` a la UI: falta la capa `hooks/`
+  (`src/features/chat/hooks/useChatThread.ts`) que los componentes van a
+  consumir — hoy la lógica de negocio existe pero nada de React la llama
+  todavía.
 
 ## Fase 2 — Pagos y acceso pago (25%)
 
