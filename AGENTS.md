@@ -45,6 +45,25 @@ Stack: Expo (React Native) + TypeScript (strict) + Expo Router (routes under
   not `` className={`base classes ${isActive ? "is-active-class" : ""}`} ``.
   Import it as `import { clsx } from "clsx"` (named import, not default —
   avoids the `import/no-named-as-default` ESLint warning).
+- **Component props use a named `interface ComponentNameProps`, never an
+  inline object type on the function signature:**
+
+  ```tsx
+  interface MessageBubbleProps {
+    threadMessage: ThreadMessage;
+    onRetry: (clientId: string) => void;
+  }
+
+  export function MessageBubble({ threadMessage, onRetry }: MessageBubbleProps) {
+    // ...
+  }
+  ```
+
+  not `export function MessageBubble({ threadMessage, onRetry }: {
+  threadMessage: ThreadMessage; onRetry: (clientId: string) => void }) {`.
+  The interface is named after the component (`MessageBubbleProps`,
+  `IconButtonProps`), declared right above it in the same file — never
+  reused across unrelated components even if two happen to share a shape.
 
 ## Forms
 
