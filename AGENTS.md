@@ -30,6 +30,10 @@ Stack: Expo (React Native) + TypeScript (strict) + Expo Router (routes under
 
   Never `if (condition) return x;`. Enforced via ESLint (`curly: ["error",
   "all"]`, already configured in `eslint.config.js`).
+- **Conditional JSX rendering uses `&&`, never a ternary with `null`.**
+  `{condition && <Component />}`, not `{condition ? <Component /> : null}`.
+  Only fall back to a ternary when both branches render something (an
+  actual if/else, not an if/nothing).
 
 ## Forms
 
@@ -99,6 +103,15 @@ Layers:
   `services/`.
 - **`components/`** — all the real UI. Components call a hook from
   `hooks/` to read/mutate data — never `services/` directly.
+
+**Screens stay as lite as possible.** A route file under `src/app/` only
+composes components and wires a `hooks/` hook to them — no inline JSX
+beyond that composition, no business logic, no raw styling. Components
+are atomic: one component per file, named for what it renders (e.g.
+`MessageBubble`, `MessageInput`, not one file with several sub-components
+defined inline), each owning only the logic and markup it needs. If a
+screen file is growing past a simple composition, extract another
+component instead of nesting more JSX in the screen.
 
 Anything shared by more than one feature module (a button, a formatter, a
 cross-cutting hook, global constants) goes in `src/components/`,
