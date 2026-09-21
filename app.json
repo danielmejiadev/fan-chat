@@ -30,7 +30,9 @@
         }
       ],
       "expo-status-bar",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font",
+      "expo-splash-screen"
     ],
     "experiments": {
       "typedRoutes": true
