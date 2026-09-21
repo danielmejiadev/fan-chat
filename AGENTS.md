@@ -187,6 +187,15 @@ variable," not "grep every component."
   everything else via `className="text-primary"` instead of a hardcoded
   hex `color` prop. This is the one legitimate reason to wrap a
   third-party component — do it once, centrally, never per call site.
+- **Runtime overrides (per-session accent, a future dark-mode toggle,
+  …) go through the same variables, not a second theming system.** A
+  semantic var can point at an override var with a fallback:
+  `--color-primary: var(--override-primary, 88 99 222);`. Something up
+  the tree sets `--override-primary` once (NativeWind's `vars()` applied
+  to a wrapping `View`, e.g. a `ThemeProvider`), and every component below
+  it keeps using `bg-primary`/`text-primary` exactly as before, with zero
+  awareness the value is dynamic. Don't invent a parallel prop-drilled
+  theme object for this — the CSS variable indirection is the mechanism.
 
 ## Git & GitHub
 
