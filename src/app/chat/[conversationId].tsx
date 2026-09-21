@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from "expo-router";
 import { View } from "react-native";
-import { ConversationsList } from "@/features/chat/components/ConversationsList";
+import { Conversations } from "@/features/chat/components/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 import { ThreadPane } from "@/features/chat/components/ThreadPane";
@@ -15,7 +15,7 @@ export default function ChatThreadScreen() {
         <View className="flex-1 flex-row overflow-hidden rounded-2xl bg-surface">
           <DesktopSidebar />
           <View className="w-[400px] border-r border-border">
-            <ConversationsList conversationId={conversationId} />
+            <Conversations conversationId={conversationId} />
           </View>
           <ThreadPane conversationId={conversationId} />
         </View>

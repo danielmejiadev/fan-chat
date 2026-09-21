@@ -2,7 +2,7 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/Text";
-import { ConversationsList } from "@/features/chat/components/ConversationsList";
+import { Conversations } from "@/features/chat/components/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
@@ -16,7 +16,7 @@ export default function ChatListScreen() {
         <View className="flex-1 flex-row overflow-hidden rounded-2xl bg-surface">
           <DesktopSidebar />
           <View className="w-[400px] border-r border-border">
-            <ConversationsList />
+            <Conversations />
           </View>
           <View className="flex-1 items-center justify-center">
             <Text className="text-body text-foreground-secondary">Select a conversation</Text>
@@ -28,7 +28,7 @@ export default function ChatListScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
-      <ConversationsList />
+      <Conversations />
       <MobileTabBar activeTab="feed" />
     </SafeAreaView>
   );
