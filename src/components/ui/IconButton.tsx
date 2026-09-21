@@ -2,7 +2,7 @@ import { Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { clsx } from "clsx";
 
-import { Icon } from "@/components/Icon";
+import { Icon } from "@/components/ui/Icon";
 
 const DEFAULT_BG_CLASSNAME = {
   ghost: "bg-transparent",

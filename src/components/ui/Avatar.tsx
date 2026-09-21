@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { clsx } from "clsx";
 
-import { Text } from "@/components/Text";
+import { Text } from "@/components/ui/Text";
 import { getInitials } from "@/features/chat/utils/getInitials";
 
 interface AvatarProps {

@@ -148,6 +148,21 @@ cross-cutting hook, global constants) goes in `src/components/`,
 `src/hooks/`, `src/utils/`, `src/lib/`, or `src/services/` at the root
 level — never duplicated per module.
 
+### `src/components/` subfolders: `ui/` vs `layout/`
+
+- **`src/components/ui/`** — the native primitive library: `Text`,
+  `TextInput`, `Icon`, `IconButton`, `Avatar`, and anything else in that
+  same category (no business logic, no knowledge of the app's navigation
+  or a specific screen).
+- **`src/components/layout/`** — the app's navigational/structural shell:
+  things like `DesktopSidebar`, `MobileTabBar`, `SidebarItem`, `TabIcon`.
+  These compose `ui/` primitives but aren't primitives themselves, and
+  they aren't a business-domain `features/` module either (no
+  `hooks/`/`services/` of their own tied to a domain) — they're the frame
+  the app's screens render inside.
+- A component that's shared but doesn't fit either bucket (not a
+  primitive, not navigation/layout) stays directly in `src/components/`.
+
 ## Global styles and theming
 
 - Tailwind entry point: `src/global.css`, imported once in
@@ -215,6 +230,35 @@ variable," not "grep every component."
   it keeps using `bg-primary`/`text-primary` exactly as before, with zero
   awareness the value is dynamic. Don't invent a parallel prop-drilled
   theme object for this — the CSS variable indirection is the mechanism.
+
+### Typography: named type scale, size and weight as separate classes
+
+`theme.extend.fontSize` defines type roles by name (`h1`…`h5`, `body`,
+`caption` — size + line-height only, anchored on the sizes already
+confirmed by the Figma guides where they exist), not raw px values in
+components.
+
+- **On React Native, a custom font's weights are separate font files, not
+  a `fontWeight` style on one family** — a browser can synthesize a bolder
+  weight from a single font file, RN can't. `useFonts()` (in
+  `src/app/_layout.tsx`) loads each weight under its own name
+  (`Geist_400Regular`, `Geist_500Medium`, `Geist_600SemiBold`), and
+  `theme.extend.fontFamily` exposes them as `font-sans` /
+  `font-sans-medium` / `font-sans-semibold`.
+- **Always pair a size class with a weight class**: `text-h4
+  font-sans-medium`, never `text-h4 font-medium` — NativeWind's plain
+  `font-medium`/`font-semibold` only set a numeric `fontWeight` style,
+  which doesn't select the right Geist weight file on native.
+- **Never import `Text`/`TextInput` from `react-native` directly — import
+  them from `@/components/Text` / `@/components/TextInput`.** NativeWind
+  doesn't apply a default font family the way a browser's `body {
+  font-family }` cascade would (overriding `theme.fontFamily.sans` alone
+  doesn't make it apply automatically — nativewind/nativewind#387), so
+  these two thin wrappers bake `font-sans` (regular weight) in as the
+  default. Callers only ever add `font-sans-medium`/`font-sans-semibold`
+  when the weight actually deviates from regular — never `font-sans`
+  itself, since it's already the default. Same pattern, same reasoning,
+  as the `Icon` wrapper above — one central place, never per call site.
 
 ## Git & GitHub
 
