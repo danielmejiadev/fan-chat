@@ -8,236 +8,242 @@ Criterios de evaluación: mensajería y recuperación (30%), pagos/acceso pago
 Enfoque: **funcionalidad primero, UI/estilos al final**. Cada fase deja algo
 testeable antes de pasar a la siguiente.
 
+> **Este archivo es la única fuente de verdad del progreso.** Sirve para
+> retomar el trabajo con cualquier agente (Claude, otro modelo, otra
+> sesión) sin perder contexto. Reglas de mantenimiento:
+> - Cada vez que se termina algo, se marca `[x]` aquí **en el mismo turno**
+>   en que se termina — no se deja para después.
+> - La sección **"Work in progress"** de más abajo es el único lugar para
+>   trabajo a medias / bugs siendo diagnosticados. Se agrega una entrada al
+>   empezar a investigar algo no trivial, y se borra (no se archiva) en
+>   cuanto se resuelve y se verifica — su contenido pasa a estar reflejado
+>   como checkbox resuelto en la fase correspondiente.
+> - Si algo de aquí queda desactualizado respecto al código, el código
+>   manda; se corrige este archivo para que vuelva a ser verdad.
+
 ## Decisiones de arquitectura (confirmadas)
 
 | Decisión | Elegido | Por qué |
 |---|---|---|
-| Plataforma de prueba | iOS Simulator | macOS local, ruta más directa con Expo |
+| Plataforma de prueba | iOS Simulator + Web (Metro) | macOS local; web se usa además para iterar rápido en UI |
 | Persistencia | `expo-sqlite` (todo: cola de mensajes, idempotencia, dataset de 50k) | Un solo motor, consultas paginadas eficientes, evita duplicar lógica de storage |
 | Lista virtualizada | `@shopify/flash-list` | Mejor performance en listas invertidas tipo chat con 50k items |
-| Fuente de diseño | Figma real (FanSuite), extraído vía "Copy as code → CSS (all layers)" + screenshots (desktop y mobile) pegados por el usuario | MCP de Figma no tiene acceso de editor; esta vía no lo requiere |
-
-Pendiente instalar: `expo-sqlite`, `@shopify/flash-list` (no están en
-`package.json` todavía).
+| Fuente de diseño | Figma real (FanSuite), extraído vía "Copy as code → CSS (all layers)" + screenshots (desktop y mobile) pegados por el usuario, guardados en `docs/design/` | MCP de Figma no tiene acceso de editor; esta vía no lo requiere |
+| Layout responsive | `useIsDesktopLayout` + `AppChrome` (`DesktopSidebar`/`MobileTabBar`) | Un solo `ChatWorkspace` que decide layout en runtime en vez de duplicar pantallas por plataforma |
 
 ## Design tokens extraídos del Figma (FanSuite, node 1:9)
 
-Fuente: CSS copiado del frame "Messages Fan /Mobile/" + capturas desktop y
-mobile. Van a `tailwind.config.js`, nunca hardcodeados en componentes
-(regla del AGENTS.md).
+Ya viven en `tailwind.config.js` (colores, `boxShadow`, `borderRadius`) —
+**no se repiten valores hardcodeados aquí**; si hace falta ver el valor
+exacto de un token, `tailwind.config.js` es la fuente. Fuente original:
+CSS copiado del frame "Messages Fan /Mobile/" + capturas en
+`docs/design/fansuite-desktop.jpg` y `docs/design/fansuite-mobile.jpg`.
 
-- **Fuente**: `Geist` (buscar variante disponible vía `expo-font`/Google
-  Fonts; si no está, fallback a system font y anotarlo en README como
-  limitación).
-- **Colores base**:
-  - Fondo de canvas/app: `#EEEEEE`
-  - Fondo de paneles/cards: `#FFFFFF`
-  - Texto primario: `#18181B` (zinc-900)
-  - Texto secundario/metadata: `#71717A` / `#737373` (zinc-500)
-  - Bordes: `#E4E4E7`, `#E5E5E5`
-  - Fila de mensaje resaltada/seleccionada (lista de chats): `#EAEBFB`
-    (lavanda claro — probable variante del color de acento)
-  - Status online: `#16A34A` (verde); status offline/away: `#A1A1AA` /
-    `#D4D4D8`
-  - **Acento primario**: `#5863DE` (índigo/violeta) — confirmado en botones
-    activos (background + border) en desktop y mobile.
-  - Acento secundario/focus: `#8258DE` (bordes/inset-shadow en estados
-    hover o focus de iconos).
-  - Acento translúcido (fondos sutiles/hover): `rgba(88, 99, 222, 0.05)`
-    (mismo tono que el acento primario con alpha).
-  - Error/failed: `#DC2626` (rojo).
-- **Tipografía** (Tailwind `fontSize`/`lineHeight` custom):
-  - `text-sm` medium, `leading-none`: 14px/14px (nombres, headers)
-  - `text-sm` normal, `leading-normal`: 14px/20px (cuerpo de mensaje)
-  - `text-xs` normal, `leading-none`: 12px/12px (timestamps, metadata)
-- **Spacing/radios**: gaps de 4/8/12/16px; `border-radius` de 8px
-  (bubbles/filas), 9999px (avatars), 6-10px (botones/inputs), 320px (status
-  dot), 28px solo en esquinas superiores del bottom nav.
-- **Sombras**: `shadow-xs` = `0px 1px 2px rgba(0,0,0,0.05)`;
-  `inset-shadow-xs` en botones de icono.
-- **Avatares**: 40px (principal en fila), 20px (badge secundario).
-- **Bottom nav** (mobile): fondo `rgba(255,255,255,0.94)`, `backdrop-blur`,
-  borde superior `#E4E4E7`, esquinas superiores redondeadas 28px.
-
-Pantallas de referencia disponibles: lista de chats + thread (desktop y
-mobile), modal de "Gift the creator" / paywall de pago (desktop). **Falta**:
-capturas de los estados que vamos a construir nosotros — offline/pending
-enviando, failed con retry, purchase pending/confirmed — el Figma no los
-tiene explícitos, así que en Fase 4 se diseñan "lite" siguiendo el mismo
-sistema de tokens (ej. bubble con opacidad reducida + ícono de reloj para
-pending, borde rojo + texto de error para failed).
+Pendiente de tokens: fuente `Geist` no confirmada instalada (revisar si
+`expo-font`/Google Fonts la trae o si se queda en fallback a system font —
+anotar como limitación en el README si aplica).
 
 ## Fase 0 — Setup y arquitectura base ✅
 
-- Jest + jest-expo + @testing-library/react-native v14.
-- `pnpm test`, `pnpm run typecheck`, `pnpm run lint` limpios.
-- `pnpm-workspace.yaml` con `allowBuilds` para `unrs-resolver` y
-  `@parcel/watcher`.
-- [x] Instalar `expo-sqlite` y `@shopify/flash-list`.
-- [x] Definir estructura de datos: `ClientMessage`/`ServerMessage`/
-  `ThreadMessage` en `src/features/chat/types.ts`; `StorePurchase`/
-  `PurchaseConfirmation` en `src/features/purchases/types.ts`.
+- [x] Jest + jest-expo + @testing-library/react-native v14; `pnpm test`,
+  `pnpm run typecheck`, `pnpm run lint` limpios.
+- [x] `expo-sqlite`, `@shopify/flash-list` instalados.
+- [x] Estructura de datos (`ClientMessage`/`ServerMessage`/`ThreadMessage`,
+  `StorePurchase`/`PurchaseConfirmation`).
 - [x] Esquema SQLite: `src/lib/database.ts` (conexión singleton),
-  `src/features/chat/storage/chatDatabase.ts` (`pending_messages`,
-  `accepted_client_ids`, `messages`), `src/features/purchases/storage/purchasesDatabase.ts`
-  (`store_purchases`, `purchase_confirmations`). Inicializado en
+  `chatDatabase.ts`, `purchasesDatabase.ts`. Inicializado en
   `src/app/_layout.tsx`.
-- [ ] `chatService.ts` / `purchaseService.ts` (la lógica mock en sí) se
-  escriben en Fase 1 y Fase 2 respectivamente, junto con sus tests — crear
-  el archivo vacío ahora sería un esqueleto sin comportamiento real.
 
-**Nota de arquitectura**: dentro de cada feature module se añade una capa
-`storage/` (ej. `src/features/chat/storage/`) separada de `services/`.
-`storage/` es dueña del schema y del CRUD crudo contra SQLite — sin reglas
-de negocio, igual que `utils/` no hace I/O. `services/` (Fase 1/2) consume
-`storage/` y ahí vive la lógica: idempotencia, orden de reconciliación,
-reintentos. Evita mezclar "crear tablas" con "reglas de negocio" bajo el
-mismo folder, que es justamente lo que `services/` no debería ser según el
-propio AGENTS.md ("Business rules live here").
+**Nota de arquitectura**: capa `storage/` por feature module, separada de
+`services/` — `storage/` es dueña del schema y CRUD crudo; `services/`
+tiene la lógica de negocio (idempotencia, orden de reconciliación,
+reintentos).
 
-## Fase 1 — Mensajería confiable (30%)
+## Fase 1 — Mensajería confiable (30%) ✅ funcional + UI
 
-- [x] Reproducir el bug de duplicados (respuesta perdida tras retry) antes
-  de tocar código — test dedicado en `chatService.test.ts` que documenta el
-  repro con un backend mock sin dedupe (`createMockChatBackend(false)`).
-- [x] Persistir mensajes pendientes en SQLite antes de encolarlos.
-  `clientId` estable (UUID generado en `enqueueMessage`) que sobrevive
-  reinicios de la app (persistencia ya implementada; el test de force-quit
-  en sí queda pendiente, ver abajo).
-- [x] Mock backend recuerda `clientId`s ya aceptados (dedupe por
-  `clientId` en `mockChatBackend.ts`, más `accepted_client_ids` en SQLite).
-- [x] `chatService.ts`: `enqueueMessage`, `flushPendingMessages`,
-  `receiveMessages`, `syncThread`, `getConfirmedThread`,
-  `getPendingMessages` — con `ChatStore` inyectable para poder testear la
-  lógica en memoria sin depender del motor nativo de SQLite en Jest.
-- [x] Escenarios obligatorios cubiertos por tests (`chatService.test.ts`,
-  6/6 verdes):
-  1. [x] 3 mensajes offline quedan en estado "esperando" (Pending), en orden.
-  2. [ ] Esos 3 sobreviven un force-quit de la app — **pendiente**: requiere
-     una prueba de integración contra SQLite real (no el store en memoria),
-     ver más abajo.
-  3. [x] 4 mensajes entrantes se reconcilian al reconectar sin duplicar
-     (`receiveMessages` + `syncThread`, idempotentes por `serverId`).
-  4. [x] Retry de una respuesta perdida deja una sola copia final — probado
-     tanto el bug (backend sin dedupe → 2 copias) como el fix (backend con
-     dedupe → 1 copia, incluso con 3 reintentos redundantes).
-  5. [x] Fallos claros: texto preservado + estado Failed para retry manual.
-- [x] Orden final del thread lo decide el mock backend
-  (`listMessages`/`syncThread`); los salientes mantienen orden local en
-  `pending_messages` hasta confirmarse.
-- [x] **Recuperación tras force-quit — limitación documentada y resuelta
-  como corresponde**: `expo-sqlite` es un módulo nativo, y Jest (vía
-  `jest-expo`) corre en Node, que no puede ejecutar el binario nativo de
-  SQLite. No existe forma honesta de que un test de Jest escriba un `.db`
-  real, mate el proceso y lo reabra — cualquier test que dijera hacer eso
-  estaría simulando un resultado, no probándolo. En vez de fingir esa
-  prueba:
-  - Se documentó el checklist manual de verificación en
-    `docs/manual-scenarios.md` (referenciado también aquí), para correr en
-    el iOS Simulator como parte de las grabaciones de Fase 6: mandar 3
-    mensajes offline, forzar el cierre completo de la app (no
-    backgroundear), reabrir, verificar que los 3 siguen ahí en el mismo
-    orden y estado, y que al reconectar se entregan sin duplicarse.
-  - Se agregó `chatService.persistenceGuarantee.test.ts`, que sí es
-    honestamente testeable en Jest: prueba, con un `ChatStore` espía que
-    registra el orden de llamadas, que `enqueueMessage` persiste el
-    mensaje de forma síncrona *antes* de que `flushPendingMessages` intente
-    cualquier llamada de red. Esa es la precondición necesaria para que la
-    recuperación tras force-quit sea posible — si esa garantía se rompiera,
-    un mensaje podría existir solo en memoria JS durante la ventana que un
-    force-quit perdería.
-- [x] Conectar `chatService` a la UI: capa `hooks/`
-  (`src/features/chat/hooks/useChatThread.ts`) que los componentes van a
-  consumir — lee el thread confirmado + pendiente al montar, expone
-  `sendMessage` (optimista, síncrono), `retryMessage` y `isOffline`, y
-  reconcilia periódicamente / al volver a foreground contra un mock
-  backend por conversación (`services/chatBackendRegistry.ts`). Estado
-  local (`useState`/`useEffect`), no Zustand — justificado en un comentario
-  en el propio hook (nada fuera de él necesita leer/escribir ese estado
-  todavía). Cubierto por `hooks/__tests__/useChatThread.test.ts` con
-  `renderHook`.
+- [x] Repro del bug de duplicados (respuesta perdida tras retry) antes de
+  tocar código, documentado en `chatService.test.ts`.
+- [x] Mensajes pendientes persistidos en SQLite antes de encolarlos,
+  `clientId` estable (UUID vía `expo-crypto`).
+- [x] Dedupe por `clientId` en el mock backend + `accepted_client_ids`.
+- [x] `chatService.ts` completo, con `ChatStore` inyectable para tests en
+  memoria.
+- [x] Los 5 escenarios obligatorios cubiertos por tests
+  (`chatService.test.ts`, verde) — force-quit resuelto vía
+  `chatService.persistenceGuarantee.test.ts` (honestamente testeable en
+  Jest) + checklist manual en `docs/manual-scenarios.md` para grabar en el
+  Simulator (Jest no puede matar/reabrir un proceso nativo real).
+- [x] `useChatThread` (`src/features/chat/hooks/useChatThread.ts`): thread
+  confirmado + pendiente, `sendMessage` optimista, `retryMessage`,
+  `loadOlderMessages` (ventana creciente), reconciliación periódica (5s) +
+  al volver a foreground (`AppState`). Cubierto por
+  `hooks/__tests__/useChatThread.test.ts`.
+- [x] **UI conectada**: `ChatWorkspace` (lista + thread, responsive
+  desktop/mobile) → `ConversationsList`, `MessagesList` (FlashList),
+  `MessageBubble`, `MessageInput`, `ChatThreadHeader`, `OfflineBanner`,
+  `ConversationSearch`. Rutas `src/app/index.tsx` y
+  `src/app/chat/[conversationId].tsx` son ahora lite wrappers de
+  `ChatWorkspace`.
+- [ ] Demo seeding (`ensureDemoConversationSeeded`) y flujo completo
+  probados a mano end-to-end en Simulator/web tras el fix de SQLite en
+  progreso (ver "Work in progress" abajo) — bloqueado por ese bug.
 
-## Fase 2 — Pagos y acceso pago (25%)
+## Fase 2 — Pagos y acceso pago (25%) ✅ funcional + UI
 
-- [x] `src/features/purchases/storage/purchaseStore.ts`: interfaz
-  `PurchaseStore` (contrato CRUD contra `store_purchases` y
-  `purchase_confirmations`), análoga a `ChatStore`.
-- [x] `src/features/purchases/storage/purchasesDatabase.ts`:
-  `createSqlitePurchaseStore()` implementando `PurchaseStore` contra
-  `expo-sqlite`, mismo estilo que `createSqliteChatStore`.
-- [x] `src/features/purchases/services/mockPurchaseBackend.ts`: mock de la
-  tienda + backend de confirmación, con `purchase()` (resultado inmediato:
-  succeeded/canceled/failed) y `confirmEntitlement()` como llamada separada
-  y posterior en el tiempo — más `restorePurchases()`.
-- [x] `src/features/purchases/services/purchaseService.ts`: lógica de
-  negocio con el mismo patrón de DI (`store?: PurchaseStore`) que
-  `chatService.ts` — `initiatePurchase`, `processPurchase`,
-  `confirmPurchase`, `restorePurchases`, `getEntitlementStatus`.
-- [x] Taps repetidos no duplican la compra: `initiatePurchase` es idempotente
-  por `productId` mientras haya una compra `Pending` en curso.
-- [x] Cubrir: compra exitosa, cancelación, fallo, restauración (todas con
-  test dedicado en `purchaseService.test.ts`).
-- [x] Separar "resultado de la compra" (`processPurchase`, contra el mock de
-  la tienda) de "confirmación del backend mock" (`confirmPurchase`) — estado
-  `Pending` honesto entre medio; acceso (`EntitlementStatus.Active`) solo se
-  otorga tras la confirmación.
-- [x] Eventos repetidos (confirmación duplicada, ej. doble webhook simulado)
-  no duplican el efecto de acceso — `upsertConfirmation` por `purchaseId`.
-  Un intento fallido no relacionado (mismo producto u otro) no revoca un
-  acceso `Active` ya otorgado — aislado por `purchaseId`/`productId` en
-  `getEntitlementStatus`.
-- [x] **Test obligatorio**: confirmación demorada — la compra queda
-  `succeeded` en la tienda pero el entitlement local se lee `Pending` hasta
-  que llega la confirmación por separado, y solo entonces pasa a `Active`
-  (`purchaseService.test.ts`, describe "delayed confirmation").
-- [x] Escenarios cubiertos por tests (`purchaseService.test.ts`, 11/11
-  verdes): compra exitosa con confirmación separada, cancelación, fallo (+
-  intento de confirmar una compra fallida lanza error), restauración sin
-  duplicar, confirmación demorada, taps repetidos (no duplica + sí permite
-  una compra nueva una vez resuelta la anterior), confirmación duplicada
-  (no duplica el efecto), aislamiento entre compras (producto no
-  relacionado y segunda compra del mismo producto que falla, ninguna revoca
-  un acceso `Active` existente).
-- [ ] Paywall con mock de compra conectado a la UI: producto/precio/estado
-  visibles — pendiente, falta la capa `hooks/` y los componentes que
-  consuman `purchaseService` (mismo pendiente que `useChatThread` en Fase
-  1); hoy la lógica de negocio existe y está testeada pero nada de React la
-  llama todavía.
-- [ ] Para el README: explicar cómo conectaría a billing real (RevenueCat o
-  StoreKit/Billing directo), validación server-side de recibos, manejo de
-  expiración/reembolsos.
+- [x] `PurchaseStore` + `createSqlitePurchaseStore` (mismo patrón que
+  chat).
+- [x] `mockPurchaseBackend.ts`: `purchase()`, `confirmEntitlement()`
+  (separada en el tiempo), `restorePurchases()`.
+- [x] `purchaseService.ts`: `initiatePurchase`, `processPurchase`,
+  `confirmPurchase`, `restorePurchases`, `getEntitlementStatus` — mismo
+  patrón de DI que `chatService`.
+- [x] Taps repetidos no duplican compra (idempotente por `productId`
+  mientras hay una `Pending` en curso).
+- [x] Cubierto por tests (`purchaseService.test.ts`, 11/11 verde): compra
+  exitosa + confirmación separada, cancelación, fallo, restauración sin
+  duplicar, confirmación demorada, taps repetidos, confirmación duplicada,
+  aislamiento entre compras.
+- [x] **UI conectada**: `GiftModal` (responsive, elige monto/medio de
+  pago, muestra subtotal/fees/total) + `useGiftPurchase` hook
+  (`pay`/`reset`, estados `idle/pending/confirmed/failed/canceled`) +
+  `purchaseBackendRegistry.ts`. Disparado desde `MessageInput` →
+  `ThreadPane` en `ChatWorkspace`; al confirmar, inserta un mensaje de
+  sistema en el thread vía `onGiftSent`.
+- [ ] Probar a mano el flujo de gift end-to-end en Simulator/web (mismo
+  bloqueo que Fase 1: SQLite en progreso).
+- [ ] Para el README: explicar cómo conectaría a billing real (RevenueCat
+  o StoreKit/Billing directo), validación server-side de recibos, manejo
+  de expiración/reembolsos.
 
-## Fase 3 — Datos a escala y performance (funcional, sin UI)
+## Fase 3 — Datos a escala y performance
 
-- [x] Generar 50,000 mensajes mock repetibles (seed fija) en SQLite.
-  `generatePerfTestMessages.ts` (PRNG mulberry32 con seed 42, timestamp de
-  referencia fijo) + `ensurePerfTestMessagesSeeded()` (idempotente, no
-  resiembra si ya están los 50k) para `conversationId = "perf-test"`.
+- [x] 50,000 mensajes mock repetibles (seed fija, PRNG mulberry32) para
+  `conversationId = "perf-test"` — `generatePerfTestMessages.ts` +
+  `ensurePerfTestMessagesSeeded()` (idempotente).
 - [x] `ChatStore.getThreadMessagesPage` — paginación keyset por
-  `(createdAt, serverId)`, implementada en SQLite y en el fake en memoria,
-  verificada con test dedicado paginando los 50k reales sin huecos ni
-  duplicados (`chatStorePagination.test.ts`).
-- [ ] Carga con paginación + FlashList **en la UI**: falta exponer la
-  paginación desde `chatService`/`useChatThread` y armar la pantalla mínima
-  (sin estilos) que la consuma — solo existe a nivel de storage/tests hoy.
+  `(createdAt, serverId)`, en SQLite y en el fake en memoria, verificada
+  contra los 50k reales sin huecos ni duplicados
+  (`chatStorePagination.test.ts`).
+- [x] UI de paginación: `MessagesList` usa `FlashList` con
+  `onStartReached`/`onStartReachedThreshold` + `useChatThread.loadOlderMessages`
+  (ventana creciente de a 30). Genérico, ya funciona para cualquier
+  conversación con historial largo.
+- [ ] **Falta enganchar la conversación de 50k al flujo real de UI**: hoy
+  `PERF_TEST_CONVERSATION_ID = "perf-test"` no aparece en
+  `mockConversations.ts` ni se llama `ensurePerfTestMessagesSeeded()` desde
+  ningún componente — solo se ejercita en tests. Hace falta: (a) agregar
+  esa conversación a la lista mock (o un entry point dedicado tipo
+  "Perf test" en el `DesktopSidebar`/`MobileTabBar`), (b) llamar
+  `ensurePerfTestMessagesSeeded()` al entrar, igual que
+  `ensureDemoConversationSeeded` para la demo normal.
 - [ ] Definir secuencia repetible de scroll + tipeo para perfilar después
-  (guion fijo: scroll rápido al fondo, scroll lento leyendo, escribir en el
-  input mientras se hace scroll) — depende de que exista la pantalla.
+  (guion fijo: scroll rápido al fondo, scroll lento leyendo, escribir en
+  el input mientras se hace scroll) — depende del punto anterior.
 
-## Fase 4 — UI/UX/estilos (al final)
+## Fase 4 — UI/UX/estilos
 
-- [ ] Aplicar tokens extraídos del Figma (ver tabla arriba) vía
-  `tailwind.config.js`, nunca hardcodeado en componentes.
-- [ ] Diseñar estados faltantes que el Figma no cubre: offline, pending,
-  failed, purchase pending/confirmed — mismo sistema, sin inventar una
-  paleta nueva.
-- [ ] Teclado (`KeyboardAvoidingView`/`react-native-keyboard-controller` si
-  hace falta), safe areas, accesibilidad (labels, tamaños de touch target),
-  transiciones, respeto de "reduced motion".
+- [x] Tokens del Figma en `tailwind.config.js` (colores, sombras, radios) —
+  nunca hardcodeados en componentes.
+- [x] Layout responsive desktop/mobile: `useIsDesktopLayout` +
+  `src/features/shell/components/` (`DesktopSidebar`, `MobileTabBar`,
+  `SidebarItem`, `TabIcon`).
+- [x] Componentes atómicos construidos: `Avatar`, `IconButton`,
+  `ConversationListItem`, `ConversationSearch`, `ChatListHeader`,
+  `ChatThreadHeader`, `OfflineBanner`, `MessageBubble`, `MessageInput`,
+  `MessagesList`, `GiftModal`. Cada componente en su propio archivo (sin
+  sub-componentes definidos inline) y todo `className` condicional vía
+  `clsx` (ver `AGENTS.md`).
+- [x] `KeyboardAvoidingView` en `ThreadPane` (iOS `padding`), `SafeAreaView`
+  en las pantallas.
+- [x] Design kit de color: primitivos + tokens semánticos (con pares
+  `-foreground` estilo shadcn/ui) vía CSS variables en
+  `src/design/colors.css`, importado en `src/global.css`, consumidos desde
+  `tailwind.config.js` con el formato `rgb(var(--x) / <alpha-value>)` —
+  `accent` renombrado a `primary` (única familia de marca real del Figma,
+  se omitió `secondary` por no existir). Íconos (`Ionicons`) migrados a
+  `className` vía `cssInterop` (`src/components/Icon.tsx`) en vez de
+  `color="#hex"`, para que también lean los mismos tokens — ya no queda
+  ningún hex de color hardcodeado en componentes.
+- [x] Fuente Geist real cargada vía `@expo-google-fonts/geist` + `useFonts`
+  en `src/app/_layout.tsx` (pesos 400/500/600, con `expo-splash-screen`
+  bloqueando el primer render hasta que carguen). Verificado que compila
+  y que los tres nombres de fuente llegan al bundle (`pnpm run web` /
+  `expo export --platform web`).
+- [x] Escala tipográfica por rol (`h1`–`h5`, `body`, `caption`) en
+  `tailwind.config.js` (`theme.extend.fontSize`), anclada en los tamaños
+  ya confirmados por el Figma (`h4`=16/24 = el actual `text-base`
+  usado en headers/títulos de modal, `body`=14/20 = el actual `text-sm`
+  del cuerpo de mensajes, `caption`=12/16 = el actual `text-xs` de
+  timestamps/metadata); `h1`–`h3`/`h5` extienden la misma escala para
+  pantallas que el Figma todavía no cubre. Como RN no puede simular
+  variantes de peso sobre una fuente custom (cada peso es un archivo de
+  fuente separado), cada tamaño se combina con una clase de familia
+  (`font-sans`/`font-sans-medium`/`font-sans-semibold`), nunca con
+  `font-medium`/`font-semibold` de NativeWind solos.
+- [x] Migrados todos los `Text`/`TextInput` de `text-sm`/`text-xs`/`text-base`
+  sueltos a `text-h4`/`text-h5`/`text-body`/`text-caption` +
+  `font-sans*` en los ~16 componentes que los usaban. `h1`–`h3` quedan
+  definidos pero sin ningún call site todavía — no hay pantalla en el
+  Figma que los necesite hoy (settings/onboarding futuros).
+- [x] `src/components/Text.tsx` y `src/components/TextInput.tsx`: wrappers
+  que aplican `font-sans` (Geist regular) por defecto, mismo patrón que
+  `src/components/Icon.tsx`. Necesarios porque NativeWind no aplica un
+  font-family por defecto a los `Text`/`TextInput` sin `className`
+  (`nativewind/nativewind#387`) — sin el wrapper, cada uso tendría que
+  repetir `font-sans` a mano. Todo el código importa `Text`/`TextInput`
+  desde `@/components/...`, nunca directo de `react-native`.
+- [x] Tokens de texto renombrados de `text-*` a `foreground-*`
+  (`--color-text-primary` → `--color-foreground-primary`, etc. en
+  `src/design/colors.css` + `tailwind.config.js`) para eliminar la clase
+  doble `text-text-primary` (prefijo `text-` de Tailwind + key `text-primary`
+  del config) — ahora es `text-foreground-primary`. Aplicado en los 18
+  componentes que los usaban.
+
+- [x] Dark mode automático según el sistema — `darkMode: "media"` en
+  `tailwind.config.js` (no `"class"`: no hay toggle manual en la app, solo
+  seguir al SO, así que `"media"` es más simple y no necesita ningún hook
+  de sincronización). Valores en
+  `@media (prefers-color-scheme: dark) { :root { ... } }` dentro de
+  `src/design/colors.css`, superficies zinc-900/800/700 (no vienen del
+  Figma, inversión razonable, anotado en comentario). Si en el futuro hace
+  falta un toggle manual, hay que volver a `"class"` y reintroducir un
+  hook tipo `useSyncColorScheme` (ver historial de git).
+- [x] Accesibilidad: auditados los 10 archivos con `Pressable`/
+  `TouchableOpacity`. Agregado lo que faltaba: `TabIcon` (icon-only, sin
+  `accessibilityLabel` — ahora recibe `label` desde `MobileTabBar`:
+  "Home"/"Feed"/"Discover"/"Bookmarks"/"More"), `PaymentMethodChip`
+  (`accessibilityRole` + `accessibilityState.selected`), reacciones
+  rápidas de `MessageInput` (`accessibilityLabel="React with {emoji}"`,
+  el emoji solo no es fiable como nombre accesible), chips de monto en
+  `GiftModal` (`accessibilityRole` + `accessibilityState.selected`),
+  botón de retry en `MessageBubble` (no tenía ni `accessibilityRole`),
+  `ConversationListItem` (`accessibilityState.selected`). El resto
+  (`IconButton`, `SidebarItem`, `DesktopSidebar`, header del chat) ya
+  tenía label explícito o componía el nombre accesible de un `Text` hijo.
+- [x] `guia-desktop.css` / `guia-mobile.css` eliminados de la raíz — ya no
+  se necesitaban como referencia una vez extraídos los tokens a
+  `tailwind.config.js`/`colors.css`.
+
+### Pendiente en Fase 4
+
+- [ ] Estados que el Figma no cubre explícitamente — revisar que
+  pending/failed/offline/gift-pending ya tengan tratamiento visual
+  consistente con el sistema de tokens (bubble con opacidad reducida +
+  ícono de reloj para pending, borde rojo + texto de error para failed) —
+  falta pasada de revisión visual una vez el bug de SQLite esté resuelto y
+  se pueda ver la app corriendo.
+- [ ] "Reduced motion" / transiciones — no evaluado todavía (ver nota
+  abajo).
+- [ ] Revisión visual end-to-end del design kit (colores, tipografía,
+  incluido el nuevo `.dark`) una vez la app corra en Simulator/web sin el
+  bloqueo de SQLite — todo esto se hizo/verificó por typecheck, lint,
+  tests y `expo export`, pero nunca se vio renderizado en pantalla.
 
 ## Fase 5 — Profiling con evidencia
 
-- [ ] Correr la secuencia de scroll+tipeo de Fase 3 sobre los 50k mensajes.
+- [ ] Correr la secuencia de scroll+tipeo de Fase 3 sobre los 50k mensajes
+  (bloqueado por el punto pendiente de Fase 3: enganchar `perf-test` a la
+  UI).
 - [ ] Medir frame timing / dropped frames / memoria (Flipper, Perf Monitor
   de RN, o `react-native-performance`).
 - [ ] Identificar un bottleneck concreto, mostrar antes/después.
@@ -246,8 +252,8 @@ propio AGENTS.md ("Business rules live here").
 ## Fase 6 — Entregables
 
 - [ ] Grabaciones de los escenarios obligatorios (Fase 1 y 2).
-- [ ] `README.md`: bug encontrado, decisiones tomadas, tests, resultados de
-  performance, limitaciones conocidas, tiempo invertido por fase.
+- [ ] `README.md`: bug encontrado, decisiones tomadas, tests, resultados
+  de performance, limitaciones conocidas, tiempo invertido por fase.
 - [ ] `AI.md`: qué se usó de asistencia de IA y cómo.
 - [ ] Explicación escrita: resume de upload grande (background vs.
   force-quit).
@@ -255,13 +261,52 @@ propio AGENTS.md ("Business rules live here").
   pagos, con links oficiales.
 - [ ] Zip `Firstname_Lastname.zip` → enviar a `join@fansapi.com`.
 
+## Work in progress (bugs / tareas a medias)
+
+Nada abierto ahora mismo. Ver "Resueltos recientemente" en la Fase 1/0
+para el historial del bug de SQLite en web.
+
+### Resuelto: `expo-sqlite` en web — `SharedArrayBuffer` + `Sync operation timeout`
+
+- **Síntoma**: al abrir la app en el navegador, `openDatabaseSync` en
+  `src/lib/database.ts` fallaba primero con `SharedArrayBuffer is not
+  defined`, y tras arreglar eso (headers COOP/COEP inyectados en
+  `metro.config.js` parchando `http.Server.prototype.emit`, porque el
+  middleware de manifest de Expo Router se antepone al
+  `enhanceMiddleware` de Metro y nunca los recibía en `/`), pasó a fallar
+  con `Sync operation timeout`.
+- **Causa raíz**: el backend web de `expo-sqlite` (`wa-sqlite` sobre OPFS)
+  implementa sus métodos "síncronos" con un busy-wait sobre `Atomics`
+  esperando a un Web Worker (`invokeWorkerSync` en
+  `expo-sqlite/web/WorkerChannel.ts`), con un límite fijo de iteraciones.
+  El primer `openDatabaseSync` es lento de verdad (cargar el wasm +
+  inicializar el worker + abrir el archivo OPFS) y se disparaba
+  síncronamente y muy temprano (`initChatSchema()`/`initPurchasesSchema()`
+  a nivel de módulo en `_layout.tsx`, antes de montar nada), sin margen
+  para que el worker arrancara a tiempo.
+- **Fix aplicado**: `src/app/_layout.tsx` ahora envuelve `<Stack>` en
+  `<SQLiteProvider databaseName="myapp.db" onInit={async () => {
+  initChatSchema(); initPurchasesSchema(); }}>`. `SQLiteProvider` abre su
+  base con `openDatabaseAsync` internamente y no renderiza `children`
+  hasta que resuelve — ese `await` le da tiempo al worker/wasm de
+  terminar de inicializar antes de que corra cualquier llamada síncrona
+  posterior (incluida la del singleton `getDatabase()` en
+  `src/lib/database.ts`, que sigue igual). Confirmado que resuelve el
+  error en el navegador.
+- **Pendiente de limpieza, no bloqueante**: `SQLiteProvider` abre
+  `"myapp.db"` (nombre de ejemplo de la doc de Expo) mientras
+  `getDatabase()` sigue abriendo `"fan-chat.db"` — son dos archivos de
+  DB distintos; `myapp.db` no se usa para nada más que forzar el
+  warm-up async. Funciona así, pero conviene alinear el nombre (o
+  documentar por qué son dos bases a propósito) antes de entregar.
+
 ## Reglas de identidad y git (siempre aplican)
 
 - Nunca `Co-Authored-By` ni atribución de IA en commits/PRs.
 - Commits/PRs bajo la identidad propia (`git config user.name/email`:
   Daniel Mejia / luisdanielmejia@outlook.com). Antes de `git push` o
-  cualquier `gh` acción, verificar `gh auth status`; si la cuenta activa no
-  es la del usuario, parar y pedir que la cambien.
+  cualquier `gh` acción, verificar `gh auth status`; si la cuenta activa
+  no es la del usuario, parar y pedir que la cambien.
 - Mensajes de commit y PRs siempre en inglés, aunque el resto de la
   conversación esté en español.
 - Estilo del repo (`AGENTS.md`): llaves multilínea siempre en
