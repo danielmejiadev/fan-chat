@@ -1,23 +1,56 @@
-import { Pressable, Text } from "react-native";
+import { Pressable, View } from "react-native";
+import { clsx } from "clsx";
+import { formatDistanceToNowStrict } from "date-fns";
 
+import { Avatar } from "@/components/ui/Avatar";
+import { Text } from "@/components/ui/Text";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
+
+interface ConversationListItemProps {
+  conversation: Conversation;
+  isSelected: boolean;
+  onPress: (conversationId: string) => void;
+}
 
 export function ConversationListItem({
   conversation,
+  isSelected,
   onPress,
-}: {
-  conversation: Conversation;
-  onPress: (conversationId: string) => void;
-}) {
+}: ConversationListItemProps) {
   return (
     <Pressable
       onPress={() => onPress(conversation.id)}
-      className="px-4 py-3 border-b border-border-light"
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      className={clsx("flex-row items-center gap-2 rounded-lg p-2", {
+        "bg-highlight": isSelected,
+        "bg-surface": !isSelected,
+      })}
     >
-      <Text className="text-base font-medium text-text-primary">
-        {conversation.participantName}
-      </Text>
-      <Text className="text-text-secondary">{conversation.participantHandle}</Text>
+      <Avatar
+        name={conversation.participantName}
+        size={40}
+        tint={conversation.avatarTint}
+        showStatus
+        isOnline={conversation.isOnline}
+      />
+      <View className="flex-1 gap-1">
+        <Text className="text-h5 font-sans-medium text-foreground-primary" numberOfLines={1}>
+          {conversation.participantName}{" "}
+          <Text className="text-primary">{conversation.participantHandle}</Text>
+        </Text>
+        <View className="flex-row items-center gap-3">
+          <Text
+            className="flex-1 text-caption leading-3 text-foreground-secondary"
+            numberOfLines={1}
+          >
+            {conversation.lastMessagePreview}
+          </Text>
+          <Text className="text-caption leading-3 text-foreground-secondary">
+            · {formatDistanceToNowStrict(conversation.lastMessageAt, { addSuffix: true })}
+          </Text>
+        </View>
+      </View>
     </Pressable>
   );
 }

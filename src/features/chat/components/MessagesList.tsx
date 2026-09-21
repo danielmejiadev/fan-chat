@@ -1,32 +1,49 @@
+import { View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 
+import { Text } from "@/components/ui/Text";
 import { MessageBubble } from "@/features/chat/components/MessageBubble";
+import type { Conversation } from "@/features/chat/constants/mockConversations";
 import type { ThreadMessage } from "@/features/chat/types";
+
+interface MessagesListProps {
+  messages: ThreadMessage[];
+  conversation: Conversation;
+  onLoadOlderMessages: () => void;
+  onRetryMessage: (clientId: string) => void;
+}
 
 export function MessagesList({
   messages,
+  conversation,
   onLoadOlderMessages,
   onRetryMessage,
-}: {
-  messages: ThreadMessage[];
-  onLoadOlderMessages: () => void;
-  onRetryMessage: (clientId: string) => void;
-}) {
+}: MessagesListProps) {
   return (
-    <FlashList
-      data={messages}
-      keyExtractor={(threadMessage) =>
-        threadMessage.origin === "server"
-          ? threadMessage.message.serverId
-          : threadMessage.message.clientId
-      }
-      onStartReached={onLoadOlderMessages}
-      onStartReachedThreshold={0.5}
-      maintainVisibleContentPosition={{ startRenderingFromBottom: true }}
-      contentContainerStyle={{ paddingHorizontal: 16 }}
-      renderItem={({ item: threadMessage }) => (
-        <MessageBubble threadMessage={threadMessage} onRetry={onRetryMessage} />
-      )}
-    />
+    <View className="flex-1">
+      <FlashList
+        data={messages}
+        keyExtractor={(threadMessage) =>
+          threadMessage.origin === "server"
+            ? threadMessage.message.serverId
+            : threadMessage.message.clientId
+        }
+        onStartReached={onLoadOlderMessages}
+        onStartReachedThreshold={0.5}
+        maintainVisibleContentPosition={{ startRenderingFromBottom: true }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 24 }}
+        ListHeaderComponent={
+          <Text className="mb-6 text-center text-caption text-foreground-date">Today</Text>
+        }
+        renderItem={({ item: threadMessage }) => (
+          <MessageBubble
+            threadMessage={threadMessage}
+            onRetry={onRetryMessage}
+            participantName={conversation.participantName}
+            participantTint={conversation.avatarTint}
+          />
+        )}
+      />
+    </View>
   );
 }

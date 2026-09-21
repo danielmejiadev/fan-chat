@@ -1,7 +1,22 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 
-export function MessageInput({ onSend }: { onSend: (text: string) => void }) {
+import { Icon } from "@/components/ui/Icon";
+import { IconButton } from "@/components/ui/IconButton";
+import { Text } from "@/components/ui/Text";
+import { TextInput } from "@/components/ui/TextInput";
+import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
+
+const MESSAGE_CHARACTER_LIMIT = 400;
+const QUICK_REACTIONS = ["🔥", "❤️", "😍", "😂", "😮", "😢", "🙏", "👏", "🎉", "💯"];
+
+interface MessageInputProps {
+  onSend: (text: string) => void;
+  onOpenGift: () => void;
+}
+
+export function MessageInput({ onSend, onOpenGift }: MessageInputProps) {
+  const isDesktop = useIsDesktopLayout();
   const [draftText, setDraftText] = useState("");
 
   const handleSend = () => {
@@ -13,16 +28,56 @@ export function MessageInput({ onSend }: { onSend: (text: string) => void }) {
   };
 
   return (
-    <View className="flex-row p-4 gap-2">
-      <TextInput
-        value={draftText}
-        onChangeText={setDraftText}
-        placeholder="Message..."
-        className="flex-1 border border-border-light rounded-lg p-2"
-      />
-      <Pressable onPress={handleSend}>
-        <Text className="text-accent font-semibold">Send</Text>
-      </Pressable>
+    <View className="gap-3 border-t border-border bg-surface/95 px-4 pb-6 pt-4">
+      {isDesktop && (
+        <View className="flex-row gap-1">
+          {QUICK_REACTIONS.map((emoji) => (
+            <Pressable
+              key={emoji}
+              onPress={() => setDraftText((currentDraft) => `${currentDraft}${emoji}`)}
+              accessibilityRole="button"
+              accessibilityLabel={`React with ${emoji}`}
+              className="h-8 w-8 items-center justify-center rounded-full"
+            >
+              <Text>{emoji}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <View className="flex-row items-center gap-3">
+        <View className="h-9 flex-1 flex-row items-center gap-2 rounded-lg border border-border-light bg-surface px-3 shadow-xs">
+          <Icon name="add-circle" size={16} className="text-foreground-muted" />
+          <TextInput
+            value={draftText}
+            onChangeText={setDraftText}
+            placeholder="Placeholder"
+            placeholderTextColor="#737373"
+            maxLength={MESSAGE_CHARACTER_LIMIT}
+            className="flex-1 text-body text-foreground-primary"
+            onSubmitEditing={handleSend}
+          />
+        </View>
+        <IconButton
+          name="gift-outline"
+          accessibilityLabel="Gift the creator"
+          variant="gift"
+          onPress={onOpenGift}
+        />
+        <IconButton
+          name="send-outline"
+          accessibilityLabel="Send message"
+          variant="primary"
+          onPress={handleSend}
+        />
+      </View>
+      <View className="flex-row items-center">
+        <Text className="text-caption leading-3 text-foreground-secondary">
+          {draftText.length}/{MESSAGE_CHARACTER_LIMIT}
+        </Text>
+        <Text className="flex-1 text-right text-caption leading-3 text-foreground-secondary">
+          Available messages: Unlimited
+        </Text>
+      </View>
     </View>
   );
 }

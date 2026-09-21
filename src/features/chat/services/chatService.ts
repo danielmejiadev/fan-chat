@@ -1,8 +1,8 @@
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
 import { MessageStatus, type ClientMessage, type ServerMessage } from "@/features/chat/types";
-import { generateClientId } from "@/features/chat/utils/generateClientId";
 import type { MockChatBackend } from "@/features/chat/services/mockChatBackend";
+import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: ChatStore | null = null;
 
@@ -28,7 +28,7 @@ export function enqueueMessage(
   store?: ChatStore,
 ): ClientMessage {
   const message: ClientMessage = {
-    clientId: generateClientId(),
+    clientId: generateUuid(),
     conversationId,
     text,
     createdAt: Date.now(),
