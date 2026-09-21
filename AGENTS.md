@@ -34,6 +34,17 @@ Stack: Expo (React Native) + TypeScript (strict) + Expo Router (routes under
   `{condition && <Component />}`, not `{condition ? <Component /> : null}`.
   Only fall back to a ternary when both branches render something (an
   actual if/else, not an if/nothing).
+- **Conditional `className` always goes through `clsx`, using its object
+  form** — never a template literal or an inline `&&`/ternary string
+  concatenation:
+
+  ```tsx
+  className={clsx("base classes", { "is-active-class": isActive })}
+  ```
+
+  not `` className={`base classes ${isActive ? "is-active-class" : ""}`} ``.
+  Import it as `import { clsx } from "clsx"` (named import, not default —
+  avoids the `import/no-named-as-default` ESLint warning).
 
 ## Forms
 
@@ -130,6 +141,52 @@ level — never duplicated per module.
   `tailwind.config.js`).
 - Never component-specific styling inside `tailwind.config.js` or
   `global.css` — that goes with the component (utility classes in JSX).
+
+### Design kit: primitives + semantic color tokens via CSS variables
+
+Two-tier pattern (what shadcn/ui, Radix, and Material 3 all use, and what
+Tailwind itself documents for v3): raw color **primitives** (a `primary`
+50–950 scale, a neutral scale, …) feed **semantic** role tokens (`primary`,
+`surface`, `background`, `error`, …). The semantic tokens are backed by CSS
+custom properties, not static hex — re-theming becomes "change the
+variable," not "grep every component."
+
+- **One file, `src/design/colors.css`, is the single source of truth.**
+  `@import`ed at the top of `global.css`, before `@tailwind base;`. Defines
+  every raw value once, as a `:root` block (and a `.dark` block for dark
+  mode, once real dark values exist — never fabricate them, leave the
+  block scaffolded with a `TODO` comment until there's a real design
+  reference).
+- **Values are RGB channel triplets, not hex or `rgb()`/`hsl()` strings**
+  (`--color-primary-500: 88 99 222;`, no wrapping function) — this is
+  Tailwind v3's documented format for CSS-variable colors, and it's a hard
+  requirement on React Native: RN's style engine doesn't understand
+  `oklch()`/`hsl()` color functions at all, only hex/rgb. Tailwind v4's
+  OKLCH-based `@theme` approach doesn't apply here for that same reason.
+- **`tailwind.config.js` reads each variable with the alpha-value
+  format**: `primary: { 500: "rgb(var(--color-primary-500) /
+  <alpha-value>)", … }`. This keeps Tailwind's opacity modifiers working
+  (`bg-primary/10`) and means a color like a "selected row" tint doesn't
+  need its own separate token — it can just be `primary` at low alpha.
+- **Every background token gets a matching `-foreground` token right next
+  to it** (`primary` + `primary-foreground`, `surface` +
+  `surface-foreground`, …) — the text/icon color guaranteed to read
+  correctly on top of that background, instead of each component guessing.
+  Grouped together in `colors.css` (background then its `-foreground`
+  right below), not off in a separate "foreground" section.
+- **No invented brand colors.** A semantic role only exists if the design
+  source (Figma export, screenshots) actually has it — an app with only
+  one brand color gets `primary` and skips `secondary` rather than
+  fabricating a second one.
+- **Third-party icon libraries (e.g. `@expo/vector-icons`) don't read
+  `className`** — they take color through their own `color` prop. Wrap
+  them once with NativeWind's `cssInterop()` (`src/components/Icon.tsx`:
+  `cssInterop(Ionicons, { className: { target: "style",
+  nativeStyleToProp: { color: true } } })`, re-exported with `className?:
+  string` added to its prop type) so icons read the same tokens as
+  everything else via `className="text-primary"` instead of a hardcoded
+  hex `color` prop. This is the one legitimate reason to wrap a
+  third-party component — do it once, centrally, never per call site.
 
 ## Git & GitHub
 

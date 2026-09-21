@@ -1,0 +1,61 @@
+/* Single source of truth for every raw color value in the app. Values are
+   "r g b" triplets (Tailwind's rgb(var(--x) / <alpha-value>) format, used
+   in tailwind.config.js), sourced from docs/design/fansuite-*.jpg /
+   guia-desktop.css / guia-mobile.css. Each background is paired with its
+   own `-foreground` (shadcn/ui-style) right below it — the text/icon color
+   that goes on top of it — instead of a separate foreground group. */
+
+:root {
+  /* primary (brand) */
+  --color-primary-50: 242 243 252;
+  --color-primary-100: 225 227 249;
+  --color-primary-200: 191 195 242;
+  --color-primary-300: 149 156 234;
+  --color-primary-400: 119 128 228;
+  --color-primary-500: 88 99 222;
+  --color-primary-600: 43 58 222;
+  --color-primary-700: 30 43 190;
+  --color-primary-800: 24 35 154;
+  --color-primary-900: 19 28 124;
+  --color-primary-950: 13 19 84;
+  --color-primary-foreground: 255 255 255; /* text/icons on a primary bg */
+  --color-ring: 130 88 222; /* #8258DE, focus rings/insets */
+
+  /* surfaces */
+  --color-background: 238 238 238; /* #EEEEEE, app canvas */
+  --color-background-foreground: 24 24 27; /* #18181B, same as text-primary */
+  --color-surface: 255 255 255; /* #FFFFFF, panels/cards */
+  --color-surface-foreground: 24 24 27; /* #18181B */
+  --color-surface-muted: 245 245 245; /* #F5F5F5 */
+  --color-surface-muted-foreground: 113 113 122; /* #71717A, same as text-secondary */
+
+  /* borders */
+  --color-border: 228 228 231; /* #E4E4E7 */
+  --color-border-light: 229 229 229; /* #E5E5E5 */
+
+  /* text */
+  --color-text-primary: 24 24 27; /* #18181B */
+  --color-text-secondary: 113 113 122; /* #71717A */
+  --color-text-muted: 115 115 115; /* #737373 */
+  --color-text-zinc: 63 63 70; /* #3F3F46 */
+  --color-text-ink: 10 10 10; /* #0A0A0A */
+  --color-text-date: 82 82 91; /* #52525B */
+
+  /* status */
+  --color-online: 22 163 74; /* #16A34A */
+  --color-offline: 161 161 170; /* #A1A1AA */
+  --color-away: 212 212 216; /* #D4D4D8 */
+  --color-error: 220 38 38; /* #DC2626 */
+  --color-error-foreground: 255 255 255; /* #FFFFFF, text on the error badge */
+
+  /* misc */
+  --color-highlight: 234 235 251; /* #EAEBFB, selected-row bg */
+  --color-highlight-foreground: 88 99 222; /* #5863DE, selected row/item text */
+  --color-bubble-received: 244 244 245; /* #F4F4F5 */
+  --color-bubble-received-foreground: 24 24 27; /* #18181B, received-message text */
+}
+
+.dark {
+  /* TODO: no dark-mode reference in the Figma yet — stays equal to light
+     until real values exist. */
+}
