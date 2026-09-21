@@ -134,16 +134,50 @@ propio AGENTS.md ("Business rules live here").
 
 ## Fase 2 — Pagos y acceso pago (25%)
 
-- [ ] Paywall con mock de compra: producto/precio/estado visibles.
-- [ ] Taps repetidos no duplican la compra (debounce/estado en vuelo).
-- [ ] Cubrir: compra exitosa, cancelación, fallo, restauración.
-- [ ] Separar "resultado de la compra" (respuesta del mock de la tienda) de
-  "confirmación del backend mock" — estado `pending` honesto entre medio;
-  acceso solo se otorga tras la confirmación.
-- [ ] Eventos repetidos (ej. doble webhook simulado) no duplican efectos de
-  acceso. Un intento fallido no relacionado no revoca un acceso ya válido.
-- [ ] **Test obligatorio**: confirmación demorada (compra ok, confirmación
-  llega después, UI refleja el estado intermedio correctamente).
+- [x] `src/features/purchases/storage/purchaseStore.ts`: interfaz
+  `PurchaseStore` (contrato CRUD contra `store_purchases` y
+  `purchase_confirmations`), análoga a `ChatStore`.
+- [x] `src/features/purchases/storage/purchasesDatabase.ts`:
+  `createSqlitePurchaseStore()` implementando `PurchaseStore` contra
+  `expo-sqlite`, mismo estilo que `createSqliteChatStore`.
+- [x] `src/features/purchases/services/mockPurchaseBackend.ts`: mock de la
+  tienda + backend de confirmación, con `purchase()` (resultado inmediato:
+  succeeded/canceled/failed) y `confirmEntitlement()` como llamada separada
+  y posterior en el tiempo — más `restorePurchases()`.
+- [x] `src/features/purchases/services/purchaseService.ts`: lógica de
+  negocio con el mismo patrón de DI (`store?: PurchaseStore`) que
+  `chatService.ts` — `initiatePurchase`, `processPurchase`,
+  `confirmPurchase`, `restorePurchases`, `getEntitlementStatus`.
+- [x] Taps repetidos no duplican la compra: `initiatePurchase` es idempotente
+  por `productId` mientras haya una compra `Pending` en curso.
+- [x] Cubrir: compra exitosa, cancelación, fallo, restauración (todas con
+  test dedicado en `purchaseService.test.ts`).
+- [x] Separar "resultado de la compra" (`processPurchase`, contra el mock de
+  la tienda) de "confirmación del backend mock" (`confirmPurchase`) — estado
+  `Pending` honesto entre medio; acceso (`EntitlementStatus.Active`) solo se
+  otorga tras la confirmación.
+- [x] Eventos repetidos (confirmación duplicada, ej. doble webhook simulado)
+  no duplican el efecto de acceso — `upsertConfirmation` por `purchaseId`.
+  Un intento fallido no relacionado (mismo producto u otro) no revoca un
+  acceso `Active` ya otorgado — aislado por `purchaseId`/`productId` en
+  `getEntitlementStatus`.
+- [x] **Test obligatorio**: confirmación demorada — la compra queda
+  `succeeded` en la tienda pero el entitlement local se lee `Pending` hasta
+  que llega la confirmación por separado, y solo entonces pasa a `Active`
+  (`purchaseService.test.ts`, describe "delayed confirmation").
+- [x] Escenarios cubiertos por tests (`purchaseService.test.ts`, 11/11
+  verdes): compra exitosa con confirmación separada, cancelación, fallo (+
+  intento de confirmar una compra fallida lanza error), restauración sin
+  duplicar, confirmación demorada, taps repetidos (no duplica + sí permite
+  una compra nueva una vez resuelta la anterior), confirmación duplicada
+  (no duplica el efecto), aislamiento entre compras (producto no
+  relacionado y segunda compra del mismo producto que falla, ninguna revoca
+  un acceso `Active` existente).
+- [ ] Paywall con mock de compra conectado a la UI: producto/precio/estado
+  visibles — pendiente, falta la capa `hooks/` y los componentes que
+  consuman `purchaseService` (mismo pendiente que `useChatThread` en Fase
+  1); hoy la lógica de negocio existe y está testeada pero nada de React la
+  llama todavía.
 - [ ] Para el README: explicar cómo conectaría a billing real (RevenueCat o
   StoreKit/Billing directo), validación server-side de recibos, manejo de
   expiración/reembolsos.
