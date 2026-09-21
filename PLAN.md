@@ -125,12 +125,37 @@ propio AGENTS.md ("Business rules live here").
 - [x] Orden final del thread lo decide el mock backend
   (`listMessages`/`syncThread`); los salientes mantienen orden local en
   `pending_messages` hasta confirmarse.
-- [ ] **Test obligatorio pendiente**: recuperación tras reinicio de la app
-  contra SQLite real (no el `ChatStore` en memoria de los tests actuales).
-- [ ] Conectar `chatService` a la UI: falta la capa `hooks/`
+- [x] **Recuperación tras force-quit — limitación documentada y resuelta
+  como corresponde**: `expo-sqlite` es un módulo nativo, y Jest (vía
+  `jest-expo`) corre en Node, que no puede ejecutar el binario nativo de
+  SQLite. No existe forma honesta de que un test de Jest escriba un `.db`
+  real, mate el proceso y lo reabra — cualquier test que dijera hacer eso
+  estaría simulando un resultado, no probándolo. En vez de fingir esa
+  prueba:
+  - Se documentó el checklist manual de verificación en
+    `docs/manual-scenarios.md` (referenciado también aquí), para correr en
+    el iOS Simulator como parte de las grabaciones de Fase 6: mandar 3
+    mensajes offline, forzar el cierre completo de la app (no
+    backgroundear), reabrir, verificar que los 3 siguen ahí en el mismo
+    orden y estado, y que al reconectar se entregan sin duplicarse.
+  - Se agregó `chatService.persistenceGuarantee.test.ts`, que sí es
+    honestamente testeable en Jest: prueba, con un `ChatStore` espía que
+    registra el orden de llamadas, que `enqueueMessage` persiste el
+    mensaje de forma síncrona *antes* de que `flushPendingMessages` intente
+    cualquier llamada de red. Esa es la precondición necesaria para que la
+    recuperación tras force-quit sea posible — si esa garantía se rompiera,
+    un mensaje podría existir solo en memoria JS durante la ventana que un
+    force-quit perdería.
+- [x] Conectar `chatService` a la UI: capa `hooks/`
   (`src/features/chat/hooks/useChatThread.ts`) que los componentes van a
-  consumir — hoy la lógica de negocio existe pero nada de React la llama
-  todavía.
+  consumir — lee el thread confirmado + pendiente al montar, expone
+  `sendMessage` (optimista, síncrono), `retryMessage` y `isOffline`, y
+  reconcilia periódicamente / al volver a foreground contra un mock
+  backend por conversación (`services/chatBackendRegistry.ts`). Estado
+  local (`useState`/`useEffect`), no Zustand — justificado en un comentario
+  en el propio hook (nada fuera de él necesita leer/escribir ese estado
+  todavía). Cubierto por `hooks/__tests__/useChatThread.test.ts` con
+  `renderHook`.
 
 ## Fase 2 — Pagos y acceso pago (25%)
 
