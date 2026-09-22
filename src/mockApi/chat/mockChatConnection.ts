@@ -3,7 +3,7 @@ import { AppState, type AppStateStatus } from "react-native";
 
 import type { ChatConnection } from "@/mockApi/chat/chatConnection";
 import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
-import { flushPendingMessages, syncThread } from "@/features/chat/services/chatService";
+import { submitPendingMessages } from "@/features/chat/services/chatService";
 
 export const mockChatConnection: ChatConnection = {
   connect(conversationId, senderId, onChange) {
@@ -23,8 +23,7 @@ export const mockChatConnection: ChatConnection = {
 
     const runOnce = async (): Promise<void> => {
       if (isConnected) {
-        await flushPendingMessages(conversationId, senderId);
-        await syncThread(conversationId);
+        await submitPendingMessages(conversationId, senderId);
       }
       onChange();
     };
