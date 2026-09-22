@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   enqueueMessage,
@@ -9,6 +9,27 @@ import { MessageStatus, type Message } from "@/features/chat/types";
 
 const INITIAL_PAGE_SIZE = 30;
 const PAGE_SIZE_STEP = 30;
+
+// FlashList's own autoscroll-to-bottom only fires when the `data` array
+// reference actually changes, so a reconcile that re-fetches the same
+// content must not produce a new array — otherwise every unrelated
+// reconcile (a status tick, a heartbeat) would fight the user's manual
+// scroll by re-triggering it. See PLAN.md for the full writeup.
+function messagesAreEqual(previous: Message[], next: Message[]): boolean {
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every((message, index) => {
+    const candidate = next[index];
+    return (
+      candidate !== undefined &&
+      message.id === candidate.id &&
+      message.status === candidate.status &&
+      message.text === candidate.text
+    );
+  });
+}
 
 export type UseMessagesResult = {
   messages: Message[];
@@ -51,8 +72,12 @@ export function useMessages(conversationId: string, senderId: string): UseMessag
         getNonConfirmedMessages(conversationId),
       ]).then(([confirmedPage, nonConfirmed]) => {
         if (requestId === latestRequestId.current) {
-          setConfirmedMessages(confirmedPage);
-          setNonConfirmedMessages(nonConfirmed);
+          setConfirmedMessages((current) =>
+            messagesAreEqual(current, confirmedPage) ? current : confirmedPage,
+          );
+          setNonConfirmedMessages((current) =>
+            messagesAreEqual(current, nonConfirmed) ? current : nonConfirmed,
+          );
           setHasMoreOlderMessages(confirmedPage.length >= size);
         }
       });
@@ -100,8 +125,9 @@ export function useMessages(conversationId: string, senderId: string): UseMessag
     [nonConfirmedMessages],
   );
 
-  const messages = [...confirmedMessages, ...nonConfirmedMessages].sort(
-    (a, b) => a.createdAt - b.createdAt,
+  const messages = useMemo(
+    () => [...confirmedMessages, ...nonConfirmedMessages].sort((a, b) => a.createdAt - b.createdAt),
+    [confirmedMessages, nonConfirmedMessages],
   );
 
   return { messages, hasMoreOlderMessages, loadOlderMessages, enqueue, isFailed, refresh };

@@ -69,6 +69,7 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
           onPress={() => setIsOpen(false)}
         >
           <Pressable
+            accessible={false}
             className="w-full max-w-sm gap-3 rounded-2xl bg-surface p-5"
             onPress={() => {}}
           >
