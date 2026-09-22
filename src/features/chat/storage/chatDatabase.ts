@@ -51,7 +51,10 @@ export function createSqliteChatStore(): ChatStore {
         .select()
         .from(messages)
         .where(
-          and(eq(messages.conversationId, conversationId), ne(messages.status, MessageStatus.Confirmed)),
+          and(
+            eq(messages.conversationId, conversationId),
+            ne(messages.status, MessageStatus.Confirmed),
+          ),
         )
         .orderBy(messages.createdAt);
 
@@ -63,7 +66,10 @@ export function createSqliteChatStore(): ChatStore {
         .select({ count: count() })
         .from(messages)
         .where(
-          and(eq(messages.conversationId, conversationId), eq(messages.status, MessageStatus.Confirmed)),
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.status, MessageStatus.Confirmed),
+          ),
         );
 
       return rows[0]?.count ?? 0;
@@ -74,7 +80,10 @@ export function createSqliteChatStore(): ChatStore {
 
       const whereClause =
         before === undefined
-          ? and(eq(messages.conversationId, conversationId), eq(messages.status, MessageStatus.Confirmed))
+          ? and(
+              eq(messages.conversationId, conversationId),
+              eq(messages.status, MessageStatus.Confirmed),
+            )
           : and(
               eq(messages.conversationId, conversationId),
               eq(messages.status, MessageStatus.Confirmed),

@@ -41,7 +41,10 @@ export function createInMemoryChatStore(): ChatStore {
     async countConfirmedMessages(conversationId) {
       let total = 0;
       for (const message of messages.values()) {
-        if (message.conversationId === conversationId && message.status === MessageStatus.Confirmed) {
+        if (
+          message.conversationId === conversationId &&
+          message.status === MessageStatus.Confirmed
+        ) {
           total += 1;
         }
       }

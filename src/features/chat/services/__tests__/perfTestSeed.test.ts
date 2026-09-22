@@ -46,7 +46,9 @@ describe("ensurePerfTestMessagesSeeded", () => {
 
     await ensurePerfTestMessagesSeeded();
 
-    expect(await store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
+    expect(await store.countConfirmedMessages(PERF_TEST_CONVERSATION_ID)).toBe(
+      PERF_TEST_MESSAGE_COUNT,
+    );
   });
 
   it("does not reseed when the dataset is already present", async () => {
@@ -58,6 +60,8 @@ describe("ensurePerfTestMessagesSeeded", () => {
     await ensurePerfTestMessagesSeeded();
 
     expect(insertMessagesSpy).toHaveBeenCalledTimes(1);
-    expect(await store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
+    expect(await store.countConfirmedMessages(PERF_TEST_CONVERSATION_ID)).toBe(
+      PERF_TEST_MESSAGE_COUNT,
+    );
   });
 });

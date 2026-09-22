@@ -1,5 +1,5 @@
 import { createMockChatBackend } from "@/mockApi/chat/mockChatBackend";
-import { MessageStatus, type ClientMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 const conversationId = "conversation-1";
 const senderId = "fan-1";
@@ -20,12 +20,16 @@ describe("mockChatBackend subscribe", () => {
       notifications.push(Date.now());
     });
 
-    const message: ClientMessage = {
+    const message: Message = {
+      id: "client-1",
+      serverId: null,
       clientId: "client-1",
       conversationId,
+      senderId,
       text: "hello",
       createdAt: Date.now(),
       status: MessageStatus.Pending,
+      failureReason: null,
     };
 
     const submitPromise = backend.submitMessage(message, senderId);

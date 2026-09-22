@@ -11,7 +11,7 @@ import {
 import { createMockChatBackend } from "@/mockApi/chat/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
-import type { ClientMessage } from "@/features/chat/types";
+import type { Message } from "@/features/chat/types";
 
 /**
  * expo-sqlite is a native module — Jest runs in Node and cannot execute it —
@@ -38,17 +38,13 @@ function createCallOrderSpyStore(callOrder: string[]): ChatStore {
 
   return {
     ...store,
-    async insertPendingMessage(message: ClientMessage) {
-      callOrder.push("store:insertPendingMessage");
-      await store.insertPendingMessage(message);
+    async insertMessage(message: Message) {
+      callOrder.push("store:insertMessage");
+      await store.insertMessage(message);
     },
-    async updatePendingMessageStatus(clientId, status) {
-      callOrder.push("store:updatePendingMessageStatus");
-      await store.updatePendingMessageStatus(clientId, status);
-    },
-    async deletePendingMessage(clientId) {
-      callOrder.push("store:deletePendingMessage");
-      await store.deletePendingMessage(clientId);
+    async updateMessage(id, update) {
+      callOrder.push("store:updateMessage");
+      await store.updateMessage(id, update);
     },
   };
 }
@@ -69,9 +65,9 @@ describe("chatService persistence guarantee (precondition for force-quit recover
     const callOrder: string[] = [];
     setChatServiceStoreForTests(createCallOrderSpyStore(callOrder));
 
-    await enqueueMessage(conversationId, "hello");
+    await enqueueMessage(conversationId, senderId, "hello");
 
-    expect(callOrder).toEqual(["store:insertPendingMessage"]);
+    expect(callOrder).toEqual(["store:insertMessage"]);
   });
 
   it("never calls the network before the pending message is already persisted", async () => {
@@ -80,17 +76,17 @@ describe("chatService persistence guarantee (precondition for force-quit recover
     const realBackend = createMockChatBackend();
     const spiedBackend = {
       ...realBackend,
-      async submitMessage(message: ClientMessage, submitterId: string) {
+      async submitMessage(message: Message, submitterId: string) {
         callOrder.push("backend:submitMessage");
         return realBackend.submitMessage(message, submitterId);
       },
     };
     setConversationBackendForTests(conversationId, spiedBackend);
 
-    await enqueueMessage(conversationId, "hello");
+    await enqueueMessage(conversationId, senderId, "hello");
     await flushPendingMessages(conversationId, senderId);
 
-    const persistIndex = callOrder.indexOf("store:insertPendingMessage");
+    const persistIndex = callOrder.indexOf("store:insertMessage");
     const networkIndex = callOrder.indexOf("backend:submitMessage");
 
     expect(persistIndex).toBe(0);

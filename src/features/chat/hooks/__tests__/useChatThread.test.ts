@@ -11,7 +11,7 @@ import {
 } from "@/features/chat/services/chatService";
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
-import { MessageStatus, type ClientMessage, type ServerMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 // Deliberately not a MOCK_CONVERSATIONS id, so the registry's mock backend
 // starts with no seed messages and tests aren't coupled to fixture data.
@@ -38,14 +38,14 @@ describe("useChatThread", () => {
     await waitFor(() => {
       expect(result.current.messages).toHaveLength(1);
     });
-    expect(result.current.messages[0].message.text).toBe("hello there");
+    expect(result.current.messages[0].text).toBe("hello there");
 
     // The real-time submit + confirmation + follow-up-poll delays now stack
     // up past waitFor's default 1000ms timeout (see DEFAULT_SUBMIT_DELAY_MS
     // and DEFAULT_CONFIRMATION_DELAY_MS in mockChatBackend.ts).
     await waitFor(
       () => {
-        expect(result.current.messages[0].origin).toBe("server");
+        expect(result.current.messages[0].status).toBe(MessageStatus.Confirmed);
       },
       { timeout: 3000 },
     );
@@ -60,26 +60,29 @@ describe("useChatThread", () => {
     // Confirmation is surfaced through listMessages(), same contract as the
     // real mock backend — just without an artificial delay, since this test
     // isn't exercising the Sent -> Confirmed timing.
-    const confirmedMessages: ServerMessage[] = [];
+    const confirmedMessages: Message[] = [];
 
     const flakyBackend = {
-      async submitMessage(message: ClientMessage, senderId: string) {
+      async submitMessage(message: Message, submitterId: string) {
         if (!isBackendReachable) {
           throw new Error("network unreachable");
         }
 
-        const serverMessage: ServerMessage = {
+        const confirmedMessage: Message = {
+          id: "srv_1",
           serverId: "srv_1",
           clientId: message.clientId,
           conversationId: message.conversationId,
-          senderId,
+          senderId: submitterId,
           text: message.text,
           createdAt: message.createdAt,
+          status: MessageStatus.Confirmed,
+          failureReason: null,
         };
 
-        confirmedMessages.push(serverMessage);
+        confirmedMessages.push(confirmedMessage);
 
-        return serverMessage;
+        return confirmedMessage;
       },
       listMessages: () => confirmedMessages,
       receiveIncomingMessage: () => {
@@ -96,24 +99,23 @@ describe("useChatThread", () => {
     });
 
     await waitFor(() => {
-      const failedMessage = result.current.messages[0].message as ClientMessage;
-      expect(failedMessage.status).toBe(MessageStatus.Failed);
+      expect(result.current.messages[0].status).toBe(MessageStatus.Failed);
     });
 
-    const failedMessage = result.current.messages[0].message as ClientMessage;
+    const failedMessage = result.current.messages[0];
 
     isBackendReachable = true;
 
     await act(() => {
-      result.current.retryMessage(failedMessage.clientId);
+      result.current.retryMessage(failedMessage.id);
     });
 
     await waitFor(() => {
-      expect(result.current.messages[0].origin).toBe("server");
+      expect(result.current.messages[0].status).toBe(MessageStatus.Confirmed);
     });
 
     expect(result.current.messages).toHaveLength(1);
-    expect(result.current.messages[0].origin).toBe("server");
+    expect(result.current.messages[0].status).toBe(MessageStatus.Confirmed);
 
     unmount();
   });
@@ -134,7 +136,7 @@ describe("useChatThread", () => {
     });
 
     const findSentMessage = () =>
-      result.current.messages.find((threadMessage) => threadMessage.message.text === "still here");
+      result.current.messages.find((message) => message.text === "still here");
 
     // Poll repeatedly instead of a single assertion, since the bug was the
     // message disappearing transiently after first appearing.
@@ -147,7 +149,7 @@ describe("useChatThread", () => {
 
     await waitFor(
       () => {
-        expect(findSentMessage()?.origin).toBe("server");
+        expect(findSentMessage()?.status).toBe(MessageStatus.Confirmed);
       },
       { timeout: 3000 },
     );
@@ -161,12 +163,15 @@ describe("useChatThread", () => {
     const totalMessages = 45;
     await store.insertMessages(
       Array.from({ length: totalMessages }, (_, index) => ({
+        id: `srv_${index}`,
         serverId: `srv_${index}`,
         clientId: null,
         conversationId,
         senderId: "creator-1",
         text: `message ${index}`,
         createdAt: index * 1000,
+        status: MessageStatus.Confirmed,
+        failureReason: null,
       })),
     );
     setChatServiceStoreForTests(store);
@@ -179,7 +184,7 @@ describe("useChatThread", () => {
     expect(result.current.hasMoreOlderMessages).toBe(true);
     // Newest-first window, then re-sorted chronologically: the oldest
     // message visible should be the 16th (index 15), not index 0.
-    expect(result.current.messages[0].message.text).toBe("message 15");
+    expect(result.current.messages[0].text).toBe("message 15");
 
     await act(() => {
       result.current.loadOlderMessages();
@@ -189,7 +194,7 @@ describe("useChatThread", () => {
       expect(result.current.messages).toHaveLength(totalMessages);
     });
     expect(result.current.hasMoreOlderMessages).toBe(false);
-    expect(result.current.messages[0].message.text).toBe("message 0");
+    expect(result.current.messages[0].text).toBe("message 0");
 
     unmount();
   });

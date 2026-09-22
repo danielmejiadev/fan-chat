@@ -3,20 +3,36 @@ import {
   generatePerfTestMessages,
   PERF_TEST_CONVERSATION_ID,
 } from "@/features/chat/utils/generatePerfTestMessages";
-import type { ServerMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
-describe("ChatStore.getThreadMessagesPage", () => {
+function confirmedMessage(overrides: Partial<Message>): Message {
+  return {
+    id: overrides.serverId ?? "srv",
+    serverId: null,
+    clientId: null,
+    conversationId: "conversation-1",
+    senderId: "creator-1",
+    text: "",
+    createdAt: 0,
+    status: MessageStatus.Confirmed,
+    failureReason: null,
+    ...overrides,
+  };
+}
+
+describe("ChatStore.getConfirmedMessagesPage", () => {
   it("returns the newest page first, then walks older pages without gaps or duplicates", async () => {
     const store = createInMemoryChatStore();
     const conversationId = "conversation-1";
-    const messages: ServerMessage[] = Array.from({ length: 23 }, (_, index) => ({
-      serverId: `srv_${index}`,
-      clientId: null,
-      conversationId,
-      senderId: "creator-1",
-      text: `message ${index}`,
-      createdAt: index * 1000,
-    }));
+    const messages: Message[] = Array.from({ length: 23 }, (_, index) =>
+      confirmedMessage({
+        id: `srv_${index}`,
+        serverId: `srv_${index}`,
+        conversationId,
+        text: `message ${index}`,
+        createdAt: index * 1000,
+      }),
+    );
 
     await store.insertMessages(messages);
 
@@ -24,14 +40,17 @@ describe("ChatStore.getThreadMessagesPage", () => {
     let cursor: { createdAt: number; serverId: string } | undefined;
 
     for (let safety = 0; safety < 10; safety += 1) {
-      const page = await store.getThreadMessagesPage(conversationId, { limit: 7, before: cursor });
+      const page = await store.getConfirmedMessagesPage(conversationId, {
+        limit: 7,
+        before: cursor,
+      });
       if (page.length === 0) {
         break;
       }
-      seenServerIds.push(...page.map((message) => message.serverId));
+      seenServerIds.push(...page.map((message) => message.serverId as string));
       cursor = {
         createdAt: page[page.length - 1].createdAt,
-        serverId: page[page.length - 1].serverId,
+        serverId: page[page.length - 1].serverId as string,
       };
     }
 
@@ -48,46 +67,72 @@ describe("ChatStore.getThreadMessagesPage", () => {
     const conversationId = "conversation-1";
 
     await store.insertMessages([
-      {
+      confirmedMessage({
+        id: "srv_a",
         serverId: "srv_a",
-        clientId: null,
         conversationId,
-        senderId: "x",
         text: "a",
         createdAt: 100,
-      },
-      {
+      }),
+      confirmedMessage({
+        id: "srv_b",
         serverId: "srv_b",
-        clientId: null,
         conversationId,
-        senderId: "x",
         text: "b",
         createdAt: 100,
-      },
-      {
+      }),
+      confirmedMessage({
+        id: "srv_c",
         serverId: "srv_c",
-        clientId: null,
         conversationId,
-        senderId: "x",
         text: "c",
         createdAt: 50,
-      },
+      }),
     ]);
 
-    const firstPage = await store.getThreadMessagesPage(conversationId, { limit: 1 });
+    const firstPage = await store.getConfirmedMessagesPage(conversationId, { limit: 1 });
     expect(firstPage.map((message) => message.serverId)).toEqual(["srv_b"]);
 
-    const secondPage = await store.getThreadMessagesPage(conversationId, {
+    const secondPage = await store.getConfirmedMessagesPage(conversationId, {
       limit: 1,
-      before: { createdAt: firstPage[0].createdAt, serverId: firstPage[0].serverId },
+      before: { createdAt: firstPage[0].createdAt, serverId: firstPage[0].serverId as string },
     });
     expect(secondPage.map((message) => message.serverId)).toEqual(["srv_a"]);
 
-    const thirdPage = await store.getThreadMessagesPage(conversationId, {
+    const thirdPage = await store.getConfirmedMessagesPage(conversationId, {
       limit: 1,
-      before: { createdAt: secondPage[0].createdAt, serverId: secondPage[0].serverId },
+      before: { createdAt: secondPage[0].createdAt, serverId: secondPage[0].serverId as string },
     });
     expect(thirdPage.map((message) => message.serverId)).toEqual(["srv_c"]);
+  });
+
+  it("only ever returns Confirmed messages, never Pending/Sent/Failed ones", async () => {
+    const store = createInMemoryChatStore();
+    const conversationId = "conversation-1";
+
+    await store.insertMessage({
+      id: "client-1",
+      serverId: null,
+      clientId: "client-1",
+      conversationId,
+      senderId: "fan-1",
+      text: "still pending",
+      createdAt: 100,
+      status: MessageStatus.Pending,
+      failureReason: null,
+    });
+    await store.insertMessages([
+      confirmedMessage({
+        id: "srv_a",
+        serverId: "srv_a",
+        conversationId,
+        text: "confirmed",
+        createdAt: 50,
+      }),
+    ]);
+
+    const page = await store.getConfirmedMessagesPage(conversationId, { limit: 10 });
+    expect(page.map((message) => message.text)).toEqual(["confirmed"]);
   });
 
   it("paginates the full 50k perf dataset without gaps or duplicates", async () => {
@@ -99,7 +144,7 @@ describe("ChatStore.getThreadMessagesPage", () => {
     const seen = new Set<string>();
 
     for (let safety = 0; safety < 2000; safety += 1) {
-      const page = await store.getThreadMessagesPage(PERF_TEST_CONVERSATION_ID, {
+      const page = await store.getConfirmedMessagesPage(PERF_TEST_CONVERSATION_ID, {
         limit: 50,
         before: cursor,
       });
@@ -107,16 +152,17 @@ describe("ChatStore.getThreadMessagesPage", () => {
         break;
       }
       for (const message of page) {
-        expect(seen.has(message.serverId)).toBe(false);
-        seen.add(message.serverId);
+        const serverId = message.serverId as string;
+        expect(seen.has(serverId)).toBe(false);
+        seen.add(serverId);
       }
       total += page.length;
       cursor = {
         createdAt: page[page.length - 1].createdAt,
-        serverId: page[page.length - 1].serverId,
+        serverId: page[page.length - 1].serverId as string,
       };
     }
 
-    expect(total).toBe(await store.countMessages(PERF_TEST_CONVERSATION_ID));
+    expect(total).toBe(await store.countConfirmedMessages(PERF_TEST_CONVERSATION_ID));
   });
 });
