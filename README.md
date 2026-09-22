@@ -69,8 +69,7 @@ conditional styling (pending/failed/offline states) lives here as plain
 
 ### Hooks — `src/features/*/hooks/`, `src/hooks/`
 
-The client-side glue layer: local React state, optimistic updates, and the
-polling/`AppState`/`NetInfo` wiring that stands in for a push connection.
+The client-side glue layer: local React state and optimistic updates.
 `useChatThread` doesn't own all of this itself — it composes three smaller
 hooks:
 
@@ -78,8 +77,18 @@ hooks:
   thread.
 - `usePendingMessages` — the local outbox (messages this device queued but
   the backend hasn't confirmed).
-- `useChatConnection` — opens/polls/tears down the mock connection and
-  triggers a sync on app-foreground.
+- `useChatConnection` — opens/closes the mock connection on
+  mount/unmount and re-renders whenever it reports something new. It has
+  nothing else to expose: the connection itself is fully event-driven and
+  owns its own `AppState`/`NetInfo` wiring (see `mockChatConnection.ts`
+  below) — there's no "sync now" function for a hook or component to call.
+
+Sending or retrying a message doesn't go through `useChatConnection` at
+all — `useChatThread` calls `chatService.submitPendingMessages()` directly,
+since that's a self-contained request/response round trip. Anything this
+device didn't initiate (an incoming message, the backend's own confirmation
+delay, the debug menu's simulated events) still reaches the UI through
+`useChatConnection`'s connection.
 
 ### Services — `src/features/*/services/`, `src/services/`
 
@@ -117,9 +126,14 @@ integration would replace outright, without touching anything above it:
   idempotency, and can be told to drop a response or reject a message's
   content outright (used by the demo controls to reproduce the required
   failure scenarios on demand).
-- `mockChatConnection.ts` — polls every 5s and gates delivery on real
-  connectivity (`@react-native-community/netinfo`), standing in for a
-  socket the mock backend doesn't have.
+- `mockChatConnection.ts` — event-driven, like a real socket/channel
+  subscription: `mockChatBackend.subscribe()` notifies it the moment a
+  message actually joins the canonical thread, instead of polling on a
+  timer to find out. Owns every trigger for reconciling itself — the
+  backend's own change events, reconnect (`@react-native-community/netinfo`),
+  and app-foreground (`AppState`) — so nothing outside this file ever needs
+  to ask it to sync; it reconciles (flush + full resync) on all of them to
+  catch up on anything missed while offline.
 - `mockPurchaseBackend.ts` — the store's purchase result and the backend's
   entitlement confirmation as two separate, independently-timed calls.
 

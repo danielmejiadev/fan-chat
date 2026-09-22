@@ -315,6 +315,59 @@ reintentos).
 Nada abierto ahora mismo. Ver "Resueltos recientemente" en la Fase 1/0
 para el historial del bug de SQLite en web.
 
+### Resuelto: mensaje enviado desaparecía sin mostrar ni el reloj de pendiente
+
+- **Síntoma reportado**: al enviar un mensaje, la burbuja desaparecía —
+  nunca se llegaba a ver ni el ícono de reloj (pending).
+- **Causa raíz**: `mockChatConnection.forceSync()` se disparaba desde
+  varias fuentes no excluyentes entre sí (montaje, `setInterval` cada
+  5s, el reintento propio tras `CONFIRMATION_FOLLOWUP_DELAY_MS`, y el
+  disparo manual de `useChatThread.sendMessage()`), sin ninguna
+  coordinación. Cada corrida hacía su propio
+  `flushPendingMessages`/`syncThread`/`onChange()`, y como esas
+  operaciones son asíncronas de verdad (SQLite + los delays simulados del
+  backend), dos corridas solapadas podían resolver **fuera de orden**:
+  una corrida más vieja (con una lectura de `getPendingMessages` tomada
+  antes de que el mensaje recién encolado existiera) podía terminar
+  *después* que una corrida más nueva, y su `onChange()` pisaba el estado
+  fresco con uno viejo — el mensaje optimista quedaba fuera tanto de la
+  lista de pendientes como de la confirmada, sin ningún requestId ni
+  guarda que lo evitara.
+- **Fix aplicado (rediseño, no solo un guard)**: en vez de parchear
+  `forceSync` para que sea reentrante, se rediseñó `mockChatConnection`
+  para que sea **dirigido por eventos** en lugar de por polling, tal
+  como se comportaría un backend real (socket/Pusher/Firebase listener):
+  - `mockChatBackend.ts` ahora expone `subscribe(listener)`: notifica a
+    quien esté escuchando cada vez que un mensaje se une al hilo
+    canónico (la confirmación demorada de una submission propia, o un
+    mensaje entrante del otro participante) — sin pasar el payload,
+    igual que un frame de "hay algo nuevo" de un socket real.
+  - `mockChatConnection.ts` ya no tiene `setInterval` ni el
+    `setTimeout` de reintento de confirmación: se suscribe al evento del
+    backend y llama a `reconcile()` (antes `forceSync`) solo cuando el
+    backend efectivamente le avisa que algo cambió, más en el `connect()`
+    inicial y en la reconexión (`NetInfo`). `reconcile()` sigue siendo
+    reentrante-safe (una corrida en vuelo se comparte; una llamada que
+    llega en el medio programa una única corrida extra al terminar) como
+    defensa en profundidad, aunque el rediseño ya elimina la clase de
+    carrera por construcción al no tener múltiples disparadores
+    periódicos independientes.
+  - `useChatConnection.ts`/`chatConnection.ts` se actualizaron al mismo
+    contrato (`reconcile`/`disconnect`); `useChatThread` sigue exponiendo
+    `forceSync` públicamente sin cambios para no tocar `ThreadPane`/
+    `ChatDebugMenu`.
+  - Como defensa adicional (y porque sigue siendo válida bajo el modelo
+    nuevo), `usePendingMessages`/`useConfirmedMessages` ahora descartan
+    una lectura de refresh que resuelve fuera de orden respecto a una más
+    reciente (guardan un `requestId` y solo aplican el resultado si sigue
+    siendo el más nuevo emitido).
+- **Verificación**: reproducido visualmente con Playwright contra el
+  build web (`localhost:8081`) antes y después del fix — ver detalle en
+  el reporte de la sesión. Suite completa (33/33) estable en corridas
+  repetidas; se agregó un test de regresión en `useChatThread.test.ts`
+  que dispara varios `forceSync()` solapados alrededor de un
+  `sendMessage()` y verifica que el mensaje nunca desaparece.
+
 ### Resuelto: `expo-sqlite` en web — `SharedArrayBuffer` + `Sync operation timeout`
 
 - **Síntoma**: al abrir la app en el navegador, `openDatabaseSync` en
@@ -351,6 +404,51 @@ para el historial del bug de SQLite en web.
   dead SQLiteProvider with a useAppReady bootstrap hook"), así que ya no
   hay dos bases distintas — verificado: `grep -n "myapp.db\|fan-chat.db\|databaseName"
   src/app/_layout.tsx src/lib/database.ts` solo muestra `fan-chat.db`.
+
+### Resuelto: eliminado `forceSync` — sincronización 100% dirigida por eventos
+
+- **Objetivo**: que nada fuera de `mockChatConnection.ts` pudiera pedir
+  "sincroniza ahora". Antes, `useChatConnection` exponía `forceSync`,
+  `useChatThread` lo reexponía y lo llamaba tras cada `sendMessage`/
+  `retryMessage`, y `ThreadPane` lo pasaba a `ChatDebugMenu` como
+  `onForceSync` para que "simular 4 mensajes entrantes" se viera reflejado
+  al toque.
+- **Cambios**:
+  - `src/mockApi/chat/chatConnection.ts`: el tipo `connect()` ya no
+    devuelve `reconcile`, solo `disconnect`.
+  - `src/mockApi/chat/mockChatConnection.ts`: ahora también registra el
+    listener de `AppState` internamente (antes vivía en el hook) — junto
+    con la suscripción al backend y `NetInfo`, los tres disparadores de
+    `reconcile()` quedan encapsulados acá adentro. `reconcile` ya no se
+    retorna a quien llama a `connect()`.
+  - `src/features/chat/hooks/useChatConnection.ts`: se redujo a
+    abrir/cerrar la conexión en mount/unmount; no expone nada (`void`).
+  - `src/features/chat/hooks/usePendingMessages.ts`: ya no dispara envíos
+    al backend — solo posee el outbox local (`enqueue`, `isFailed`,
+    `refresh`). Enviar al backend dejó de ser su responsabilidad.
+  - `src/features/chat/services/chatService.ts`: nueva
+    `submitPendingMessages(conversationId, senderId)` = `flushPendingMessages`
+    + `syncThread` en un solo round-trip — el "submit al backend" completo
+    para una acción puntual (send o retry).
+  - `src/features/chat/hooks/useChatThread.ts`: `sendMessage` y
+    `retryMessage` llaman a `chatService.submitPendingMessages()`
+    directamente (no a la conexión). `forceSync` desapareció del tipo de
+    retorno.
+  - `src/features/chat/components/chatDetail/ThreadPane.tsx` /
+    `ChatDebugMenu.tsx`: se eliminó la prop `onForceSync`.
+    `simulateIncomingMessages` ya empuja directo al backend mock, que
+    llama a `notifyListeners()` — eso solo ya dispara el `reconcile()`
+    interno de `mockChatConnection` vía su suscripción al backend, sin
+    necesitar un sync manual aparte.
+- **Test de regresión** (`useChatThread.test.ts`, caso "keeps a just-sent
+  message visible when reconcile runs concurrently from multiple
+  sources"): reescrito para disparar la concurrencia con fuentes legítimas
+  (`simulateIncomingMessages` solapado con `sendMessage`) en vez de
+  `forceSync()`, que ya no existe.
+- **Verificación**: `pnpm run typecheck`, `pnpm run lint` y `pnpm test`
+  (36/36) limpios. Verificación visual con Playwright pendiente de
+  confirmar en esta sesión — ver reporte de la sesión para el detalle de
+  qué se confirmó realmente en navegador vs. solo por tests/código.
 
 ## Reglas de identidad y git (siempre aplican)
 
