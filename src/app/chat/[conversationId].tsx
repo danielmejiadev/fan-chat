@@ -28,11 +28,11 @@ export default function ChatThreadScreen() {
           <View className="w-[400px] border-r border-border">
             <Conversations conversationId={conversationId} />
           </View>
-          <ThreadPane conversationId={conversationId} />
+          <ThreadPane key={conversationId} conversationId={conversationId} />
         </View>
       </View>
     );
   }
 
-  return <ThreadPane conversationId={conversationId} />;
+  return <ThreadPane key={conversationId} conversationId={conversationId} />;
 }

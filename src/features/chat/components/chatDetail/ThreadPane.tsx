@@ -9,6 +9,7 @@ import { MessagesList } from "@/features/chat/components/chatDetail/MessagesList
 import { OfflineBanner } from "@/features/chat/components/chatDetail/OfflineBanner";
 import { CURRENT_FAN_ID, getConversationById } from "@/features/chat/constants/mockConversations";
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
+import { useIsOffline } from "@/hooks/useIsOffline";
 import { GiftModal } from "@/features/purchases/components/GiftModal";
 
 interface ThreadPaneProps {
@@ -18,8 +19,9 @@ interface ThreadPaneProps {
 export function ThreadPane({ conversationId }: ThreadPaneProps) {
   const conversation = getConversationById(conversationId);
   const [isGiftOpen, setIsGiftOpen] = useState(false);
+  const isOffline = useIsOffline();
 
-  const { messages, sendMessage, retryMessage, loadOlderMessages, isOffline } = useChatThread(
+  const { messages, sendMessage, retryMessage, loadOlderMessages } = useChatThread(
     conversationId,
     CURRENT_FAN_ID,
   );

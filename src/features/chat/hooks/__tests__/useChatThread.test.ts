@@ -80,11 +80,11 @@ describe("useChatThread", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isOffline).toBe(true);
+      const failedMessage = result.current.messages[0].message as ClientMessage;
+      expect(failedMessage.status).toBe(MessageStatus.Failed);
     });
 
     const failedMessage = result.current.messages[0].message as ClientMessage;
-    expect(failedMessage.status).toBe(MessageStatus.Failed);
 
     isBackendReachable = true;
 
@@ -93,7 +93,7 @@ describe("useChatThread", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isOffline).toBe(false);
+      expect(result.current.messages[0].origin).toBe("server");
     });
 
     expect(result.current.messages).toHaveLength(1);

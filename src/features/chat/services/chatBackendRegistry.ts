@@ -4,14 +4,7 @@ import {
   type MockChatBackend,
 } from "@/features/chat/services/mockChatBackend";
 
-/**
- * MockChatBackend stands in for "the server" for the whole app, but nothing
- * currently owns a shared instance of it. Keying one per conversationId
- * (instead of a single global instance) keeps independent conversations from
- * cross-talking while still giving every consumer of a given conversation —
- * multiple hook instances, retries, a future second screen — the same
- * backend, which is what "the server" has to mean for reconciliation to work.
- */
+/** One backend instance per conversationId, shared by every consumer of that conversation. */
 const backendsByConversationId = new Map<string, MockChatBackend>();
 
 export function getConversationBackend(conversationId: string): MockChatBackend {

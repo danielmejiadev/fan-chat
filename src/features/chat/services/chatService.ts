@@ -99,13 +99,13 @@ export function getConfirmedThread(conversationId: string): ServerMessage[] {
 }
 
 /**
- * The newest `limit` confirmed messages. Grows the window instead of
- * accumulating cursor pages — simpler to keep correct while the thread also
- * gets new messages from reconciliation, at the cost of re-reading the whole
- * window on every call. Fine at this scale; worth revisiting in Phase 5 if
- * profiling shows it's the bottleneck on the 50k-message conversation.
+ * The newest `limit` confirmed messages. Re-reads the whole page on every
+ * call instead of accumulating cursor pages — simpler to keep correct while
+ * the thread also gets new messages from reconciliation, at the cost of
+ * re-reading on every call. Fine at this scale; worth revisiting in Phase 5
+ * if profiling shows it's the bottleneck on the 50k-message conversation.
  */
-export function getThreadWindow(conversationId: string, limit: number): ServerMessage[] {
+export function getConfirmedMessagesPage(conversationId: string, limit: number): ServerMessage[] {
   return resolveStore().getThreadMessagesPage(conversationId, { limit });
 }
 
