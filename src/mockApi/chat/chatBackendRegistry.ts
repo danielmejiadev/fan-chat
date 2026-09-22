@@ -1,8 +1,5 @@
 import { getSeedMessagesForConversation } from "@/features/chat/constants/mockMessages";
-import {
-  createMockChatBackend,
-  type MockChatBackend,
-} from "@/features/chat/services/mockChatBackend";
+import { createMockChatBackend, type MockChatBackend } from "@/mockApi/chat/mockChatBackend";
 
 /** One backend instance per conversationId, shared by every consumer of that conversation. */
 const backendsByConversationId = new Map<string, MockChatBackend>();

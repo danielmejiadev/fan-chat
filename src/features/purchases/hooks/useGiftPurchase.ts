@@ -1,42 +1,72 @@
 import { useState } from "react";
 
+import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBackend";
 import {
   confirmPurchase,
   getEntitlementStatus,
   initiatePurchase,
   processPurchase,
+  restorePurchases,
 } from "@/features/purchases/services/purchaseService";
 import { EntitlementStatus, StorePurchaseStatus } from "@/features/purchases/types";
 
-export type GiftPurchaseState = "idle" | "pending" | "confirmed" | "failed" | "canceled";
+export type GiftPurchaseState =
+  "idle" | "pending" | "pending-confirmation" | "confirmed" | "failed" | "canceled";
+
+const CONFIRMATION_DELAY_MS = 1500;
 
 export function useGiftPurchase(userId: string, productId: string) {
   const [state, setState] = useState<GiftPurchaseState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const pay = (amountCents: number): boolean => {
+  /**
+   * debugOutcome lets the demo controls force a store outcome other than
+   * "succeeded" — production callers never pass it, so real behavior is
+   * unaffected.
+   */
+  const pay = (amountCents: number, debugOutcome?: PurchaseAttemptOutcome): void => {
     if (amountCents <= 0) {
-      return false;
+      return;
     }
 
     setState("pending");
     setErrorMessage(null);
 
     const purchase = initiatePurchase(productId, amountCents, "USD");
-    const processedPurchase = processPurchase(purchase, userId);
+    const processedPurchase = processPurchase(
+      purchase,
+      userId,
+      debugOutcome !== undefined ? { outcome: debugOutcome } : undefined,
+    );
 
     if (processedPurchase.status === StorePurchaseStatus.Canceled) {
       setState("canceled");
-      return false;
+      return;
     }
 
     if (processedPurchase.status !== StorePurchaseStatus.Succeeded) {
       setState("failed");
       setErrorMessage("Payment failed. Try again.");
-      return false;
+      return;
     }
 
-    confirmPurchase(processedPurchase.purchaseId);
+    // The store confirmed the charge, but access isn't granted yet — the
+    // backend's own entitlement confirmation is a separate, possibly-delayed
+    // step. Simulating that delay here is what makes the "pending
+    // confirmation" state honestly reachable from the real UI instead of
+    // only from a test with an injected backend.
+    setState("pending-confirmation");
+
+    setTimeout(() => {
+      confirmPurchase(processedPurchase.purchaseId);
+      const entitlement = getEntitlementStatus(productId);
+      setState(entitlement === EntitlementStatus.Active ? "confirmed" : "pending");
+    }, CONFIRMATION_DELAY_MS);
+  };
+
+  /** Restoring never demotes a still-valid entitlement gained some other way. */
+  const restore = (): boolean => {
+    restorePurchases(userId);
     const entitlement = getEntitlementStatus(productId);
 
     if (entitlement === EntitlementStatus.Active) {
@@ -44,7 +74,6 @@ export function useGiftPurchase(userId: string, productId: string) {
       return true;
     }
 
-    setState("pending");
     return false;
   };
 
@@ -53,5 +82,5 @@ export function useGiftPurchase(userId: string, productId: string) {
     setErrorMessage(null);
   };
 
-  return { state, errorMessage, pay, reset };
+  return { state, errorMessage, pay, restore, reset };
 }

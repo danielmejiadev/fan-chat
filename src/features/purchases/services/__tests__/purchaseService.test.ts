@@ -1,4 +1,4 @@
-import { resetPurchaseBackend } from "@/features/purchases/services/purchaseBackendRegistry";
+import { resetPurchaseBackend } from "@/mockApi/purchases/purchaseBackendRegistry";
 import {
   confirmPurchase,
   getEntitlementStatus,

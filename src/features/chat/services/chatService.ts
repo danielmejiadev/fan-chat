@@ -1,10 +1,55 @@
-import { getConversationBackend } from "@/features/chat/services/chatBackendRegistry";
+import { ContentRejectedError } from "@/mockApi/chat/mockChatBackend";
+import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
-import { MessageStatus, type ClientMessage, type ServerMessage } from "@/features/chat/types";
+import {
+  MessageFailureReason,
+  MessageStatus,
+  type ClientMessage,
+  type ServerMessage,
+} from "@/features/chat/types";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: ChatStore | null = null;
+const conversationIdsWithDroppedResponse = new Set<string>();
+const conversationIdsWithRejectedContent = new Set<string>();
+
+/**
+ * Debug-only: makes the next flushPendingMessages() call for this
+ * conversation accept the send on the backend but drop the response, so the
+ * client sees it as failed and a retry exercises the same dedupe path as a
+ * real lost response. Consumed once, then cleared automatically.
+ */
+export function dropNextResponse(conversationId: string): void {
+  conversationIdsWithDroppedResponse.add(conversationId);
+}
+
+/**
+ * Debug-only: makes the next flushPendingMessages() call for this
+ * conversation reject the send outright (never accepted by the backend) —
+ * the non-recoverable failure case, where retrying is pointless. Consumed
+ * once, then cleared automatically.
+ */
+export function rejectNextMessage(conversationId: string): void {
+  conversationIdsWithRejectedContent.add(conversationId);
+}
+
+/**
+ * Debug-only: simulates the other participant sending `count` messages while
+ * this device may be offline — only visible to the client on its next
+ * syncThread(), same as any other backend-side change.
+ */
+export function simulateIncomingMessages(
+  conversationId: string,
+  senderId: string,
+  texts: string[],
+): void {
+  const backend = getConversationBackend(conversationId);
+
+  for (const text of texts) {
+    backend.receiveIncomingMessage(conversationId, senderId, text);
+  }
+}
 
 function resolveStore(): ChatStore {
   if (defaultStore === null) {
@@ -54,17 +99,32 @@ export function flushPendingMessages(conversationId: string, senderId: string): 
   const backend = getConversationBackend(conversationId);
   const pendingMessages = chatStore.getPendingMessages(conversationId);
 
-  for (const pendingMessage of pendingMessages) {
+  const shouldDropNextResponse = conversationIdsWithDroppedResponse.delete(conversationId);
+  const shouldRejectNextMessage = conversationIdsWithRejectedContent.delete(conversationId);
+
+  for (const [index, pendingMessage] of pendingMessages.entries()) {
     chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Sent);
 
     try {
-      const serverMessage = backend.submitMessage(pendingMessage, senderId);
+      const serverMessage = backend.submitMessage(pendingMessage, senderId, {
+        dropResponse: shouldDropNextResponse && index === 0,
+        rejectContent: shouldRejectNextMessage && index === 0,
+      });
 
       chatStore.recordAcceptedClientId(pendingMessage.clientId, serverMessage.serverId);
       chatStore.insertMessage(serverMessage);
       chatStore.deletePendingMessage(pendingMessage.clientId);
-    } catch {
-      chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Failed);
+    } catch (error) {
+      const failureReason =
+        error instanceof ContentRejectedError
+          ? MessageFailureReason.Rejected
+          : MessageFailureReason.Recoverable;
+
+      chatStore.updatePendingMessageStatus(
+        pendingMessage.clientId,
+        MessageStatus.Failed,
+        failureReason,
+      );
     }
   }
 }

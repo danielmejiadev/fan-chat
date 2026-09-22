@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Text } from "@/components/ui/Text";
+import { ChatDebugMenu } from "@/features/chat/components/chatDetail/ChatDebugMenu";
 import { ChatThreadHeader } from "@/features/chat/components/chatDetail/ChatThreadHeader";
 import { MessageInput } from "@/features/chat/components/chatDetail/MessageInput";
 import { MessagesList } from "@/features/chat/components/chatDetail/MessagesList";
@@ -11,6 +12,7 @@ import { CURRENT_FAN_ID, getConversationById } from "@/features/chat/constants/m
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import { useIsOffline } from "@/hooks/useIsOffline";
 import { GiftModal } from "@/features/purchases/components/GiftModal";
+import { useEntitlementStatus } from "@/features/purchases/hooks/useEntitlementStatus";
 
 interface ThreadPaneProps {
   conversationId: string;
@@ -20,8 +22,11 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
   const conversation = getConversationById(conversationId);
   const [isGiftOpen, setIsGiftOpen] = useState(false);
   const isOffline = useIsOffline();
+  const { entitlementStatus, refresh: refreshEntitlement } = useEntitlementStatus(
+    `gift-${conversationId}`,
+  );
 
-  const { messages, sendMessage, retryMessage, loadOlderMessages } = useChatThread(
+  const { messages, sendMessage, retryMessage, loadOlderMessages, forceSync } = useChatThread(
     conversationId,
     CURRENT_FAN_ID,
   );
@@ -40,7 +45,7 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
         className="flex-1 bg-surface"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ChatThreadHeader conversation={conversation} />
+        <ChatThreadHeader conversation={conversation} entitlementStatus={entitlementStatus} />
         {isOffline && <OfflineBanner />}
         <MessagesList
           messages={messages}
@@ -54,8 +59,14 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
           visible={isGiftOpen}
           onClose={() => setIsGiftOpen(false)}
           onGiftSent={sendMessage}
+          onEntitlementChange={refreshEntitlement}
         />
       </KeyboardAvoidingView>
+      <ChatDebugMenu
+        conversationId={conversationId}
+        participantId={conversation.participantId}
+        onForceSync={forceSync}
+      />
     </SafeAreaView>
   );
 }

@@ -45,4 +45,106 @@ If the simulator doesn't open on its own, launch it manually from `Xcode > Open 
 ```bash
 pnpm lint       # ESLint
 pnpm typecheck  # tsc --noEmit
+pnpm test       # Jest
 ```
+
+## Architecture
+
+Visual diagram: **[Fan Chat Architecture](https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1)**.
+
+The app is split into five layers, and every dependency between them points
+in one direction only (UI → Hooks → Services → Storage / mockApi). That's
+what makes the retry/idempotency logic testable in Jest without a real
+device or network: swap the bottom layer for an in-memory fake, keep
+everything above it unchanged.
+
+### UI — `src/app/`, `src/features/*/components/`, `src/components/`
+
+Pure render. A screen under `src/app/` only composes components and wires a
+single hook to them — no business logic, no direct calls into `storage/` or
+`mockApi/`. Components like `MessageBubble`, `GiftModal`, `ChatDebugMenu` and
+`DemoResetButton` read whatever a hook already computed and render it;
+conditional styling (pending/failed/offline states) lives here as plain
+`clsx` classes, never as logic that decides *whether* something failed.
+
+### Hooks — `src/features/*/hooks/`, `src/hooks/`
+
+The client-side glue layer: local React state, optimistic updates, and the
+polling/`AppState`/`NetInfo` wiring that stands in for a push connection.
+`useChatThread` doesn't own all of this itself — it composes three smaller
+hooks:
+
+- `useConfirmedMessages` — the paginated, server-confirmed window of the
+  thread.
+- `usePendingMessages` — the local outbox (messages this device queued but
+  the backend hasn't confirmed).
+- `useChatConnection` — opens/polls/tears down the mock connection and
+  triggers a sync on app-foreground.
+
+There's no Zustand store anywhere in this app. AGENTS.md reserves Zustand
+for state that several *unrelated* components need to read or write — here,
+a chat thread or a gift purchase only ever belongs to the one screen
+showing it, so plain `useState`/`useEffect` inside a hook is enough. If a
+future screen needed to show, say, an unread-count badge fed by the same
+data, that's the point where it would move to a shared store.
+
+### Services — `src/features/*/services/`, `src/services/`
+
+`chatService.ts` and `purchaseService.ts` hold every rule that actually
+matters for the task: writing a message to the local outbox *before* any
+network attempt, deduping retries by `clientId`, keeping a purchase's store
+result separate from its backend entitlement confirmation, and deciding
+reconciliation order. `resetDemoData.ts` lives directly under
+`src/services/` instead of inside `chat/` or `purchases/`, because it spans
+both features.
+
+This is also the only layer with test-only escape hatches
+(`setChatServiceStoreForTests`, `setPurchaseServiceStoreForTests`) —
+production code always resolves the real SQLite-backed store; tests inject
+an in-memory one implementing the same contract.
+
+### Storage — `src/features/*/storage/`
+
+A typed CRUD contract (`ChatStore`, `PurchaseStore`) implemented twice:
+once against `expo-sqlite` for the real app (`chatDatabase.ts`,
+`purchasesDatabase.ts`), once fully in memory for Jest, which can't load a
+native SQLite binary (`createInMemoryChatStore.ts`). Services only ever
+depend on the contract, never on which implementation is behind it — that's
+what makes a pending message survive a force-quit: the moment
+`enqueueMessage` runs, it's a row in `pending_messages`, not a value sitting
+in a JS variable that dies with the process.
+
+### mockApi — `src/mockApi/chat/`, `src/mockApi/purchases/`
+
+Everything that stands in for a real backend, kept in its own top-level
+folder instead of inside `services/` — this is the one layer a real API
+integration would replace outright, without touching anything above it:
+
+- `mockChatBackend.ts` — accepts sends, remembers `accepted_client_ids` for
+  idempotency, and can be told to drop a response or reject a message's
+  content outright (used by the demo controls to reproduce the required
+  failure scenarios on demand).
+- `mockChatConnection.ts` — polls every 5s and gates delivery on real
+  connectivity (`@react-native-community/netinfo`), standing in for a
+  socket the mock backend doesn't have.
+- `mockPurchaseBackend.ts` — the store's purchase result and the backend's
+  entitlement confirmation as two separate, independently-timed calls.
+
+Connecting this to a real backend later means implementing the same
+`MockChatBackend` / `ChatConnection` / `MockPurchaseBackend` shapes against
+real endpoints — `chatService.ts` and `purchaseService.ts` wouldn't need to
+change at all.
+
+### Demo controls
+
+Two dev-only affordances make every required scenario reachable by tapping
+the screen instead of only from a test:
+
+- **`ChatDebugMenu`** (floating bug icon in a chat thread, `__DEV__` only) —
+  "Drop next response" and "Reject next message" force the two chat failure
+  modes on demand; "Simulate 4 incoming messages" adds messages from the
+  other participant, useful combined with going offline first.
+- **`DemoResetButton`** (sidebar on desktop, floating button on the
+  conversation list on mobile — always visible, not `__DEV__`-gated, since
+  the task asks for a reset action) — wipes every chat/purchase table and
+  drops the in-memory mock backends, so each recording starts clean.

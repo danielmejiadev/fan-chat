@@ -5,6 +5,18 @@ export enum MessageStatus {
 }
 
 /**
+ * Only meaningful when status is Failed. "recoverable" covers transient
+ * delivery problems (lost response, timeout) where retrying with the same
+ * clientId is the right action. "rejected" covers the backend refusing the
+ * content outright — retrying the same text would just fail again, so the
+ * UI must not offer a retry for it.
+ */
+export enum MessageFailureReason {
+  Recoverable = "recoverable",
+  Rejected = "rejected",
+}
+
+/**
  * A message as created on this device, before the mock backend confirms it.
  * The clientId is generated at creation time and must survive app restarts —
  * it is the idempotency key the mock backend uses to reconcile retries.
@@ -15,6 +27,7 @@ export type ClientMessage = {
   text: string;
   createdAt: number;
   status: MessageStatus;
+  failureReason?: MessageFailureReason;
 };
 
 /**

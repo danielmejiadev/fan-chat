@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, View } from "react-native";
 import { clsx } from "clsx";
 
@@ -12,36 +12,73 @@ import { formatUsdFromCents, GIFT_AMOUNT_CENTS } from "@/features/purchases/cons
 import { PaymentMethodChip } from "@/features/purchases/components/PaymentMethodChip";
 import { useGiftPurchase } from "@/features/purchases/hooks/useGiftPurchase";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
+import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBackend";
+import { StorePurchaseStatus } from "@/features/purchases/types";
 
 type PaymentMethod = "card" | "apple" | "paypal" | "crypto";
+
+const DEBUG_OUTCOMES: { label: string; value: PurchaseAttemptOutcome }[] = [
+  { label: "Success", value: StorePurchaseStatus.Succeeded },
+  { label: "Cancel", value: StorePurchaseStatus.Canceled },
+  { label: "Fail", value: StorePurchaseStatus.Failed },
+];
 
 interface GiftModalProps {
   conversation: Conversation;
   visible: boolean;
   onClose: () => void;
   onGiftSent: (text: string) => void;
+  onEntitlementChange: () => void;
 }
 
-export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftModalProps) {
+export function GiftModal({
+  conversation,
+  visible,
+  onClose,
+  onGiftSent,
+  onEntitlementChange,
+}: GiftModalProps) {
   const isDesktop = useIsDesktopLayout();
   const [selectedAmountCents, setSelectedAmountCents] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [email, setEmail] = useState("ethanss@gmail.com");
-  const { state, errorMessage, pay, reset } = useGiftPurchase(
+  const [debugOutcome, setDebugOutcome] = useState<PurchaseAttemptOutcome | undefined>(undefined);
+  const { state, errorMessage, pay, restore, reset } = useGiftPurchase(
     CURRENT_FAN_ID,
     `gift-${conversation.id}`,
   );
 
-  const handlePay = () => {
-    const didSucceed = pay(selectedAmountCents);
-
-    if (!didSucceed) {
-      return;
+  // Fires once the backend's delayed confirmation resolves — pay() itself
+  // can't close the modal synchronously, since "confirmed" only arrives
+  // after that delay.
+  useEffect(() => {
+    if (state === "confirmed") {
+      onGiftSent(`You sent a ${formatUsdFromCents(selectedAmountCents)} gift!`);
+      onEntitlementChange();
+      reset();
+      onClose();
     }
+  }, [state, selectedAmountCents, onGiftSent, onEntitlementChange, reset, onClose]);
 
-    onGiftSent(`You sent a ${formatUsdFromCents(selectedAmountCents)} gift!`);
-    reset();
-    onClose();
+  const handlePay = () => {
+    pay(selectedAmountCents, debugOutcome);
+  };
+
+  const handleRestore = () => {
+    const didRestore = restore();
+    if (didRestore) {
+      onEntitlementChange();
+    }
+  };
+
+  const payButtonLabel = () => {
+    if (state === "pending") {
+      return "Processing…";
+    }
+    if (state === "pending-confirmation") {
+      return "Confirming access…";
+    }
+    return `Pay ${formatUsdFromCents(selectedAmountCents)}`;
   };
 
   return (
@@ -145,6 +182,33 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
                   </Text>
                 </View>
               </View>
+
+              <View className="gap-2 rounded-xl border border-dashed border-border-light p-3">
+                <Text className="text-caption font-sans-medium text-foreground-secondary">
+                  Demo: force store outcome
+                </Text>
+                <View className="flex-row gap-2">
+                  {DEBUG_OUTCOMES.map((outcome) => (
+                    <Pressable
+                      key={outcome.value}
+                      onPress={() => setDebugOutcome(outcome.value)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: debugOutcome === outcome.value }}
+                      className={clsx("h-8 flex-1 items-center justify-center rounded-lg border", {
+                        "border-primary bg-highlight": debugOutcome === outcome.value,
+                        "border-border-light bg-surface": debugOutcome !== outcome.value,
+                      })}
+                    >
+                      <Text className="text-caption text-foreground-primary">{outcome.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable onPress={handleRestore} accessibilityRole="button">
+                  <Text className="text-caption font-sans-medium text-primary">
+                    Restore purchases
+                  </Text>
+                </Pressable>
+              </View>
             </View>
 
             <View className="flex-1 gap-4">
@@ -167,15 +231,22 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
               <Pressable
                 onPress={handlePay}
                 accessibilityRole="button"
-                className="h-11 items-center justify-center rounded-[10px] bg-primary"
+                disabled={state === "pending" || state === "pending-confirmation"}
+                className={clsx("h-11 items-center justify-center rounded-[10px] bg-primary", {
+                  "opacity-60": state === "pending" || state === "pending-confirmation",
+                })}
               >
-                <Text className="text-h5 font-sans-medium text-white">
-                  {state === "pending"
-                    ? "Processing…"
-                    : `Pay ${formatUsdFromCents(selectedAmountCents)}`}
-                </Text>
+                <Text className="text-h5 font-sans-medium text-white">{payButtonLabel()}</Text>
               </Pressable>
+              {state === "pending-confirmation" && (
+                <Text className="text-caption text-foreground-secondary">
+                  Payment received — waiting for the backend to confirm access.
+                </Text>
+              )}
               {errorMessage && <Text className="text-caption text-error">{errorMessage}</Text>}
+              {state === "canceled" && (
+                <Text className="text-caption text-foreground-secondary">Purchase canceled.</Text>
+              )}
               <Text className="text-caption text-foreground-secondary">
                 By clicking Pay, you agree to a mock FanSuite gift checkout.
               </Text>

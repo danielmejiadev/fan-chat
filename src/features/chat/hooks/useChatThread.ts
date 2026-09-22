@@ -12,6 +12,8 @@ export type UseChatThreadResult = {
   retryMessage: (clientId: string) => void;
   loadOlderMessages: () => void;
   hasMoreOlderMessages: boolean;
+  /** Forces an immediate sync — used by the debug menu after simulating backend-side changes. */
+  forceSync: () => void;
 };
 
 /** Assumes it's remounted per conversationId, so nothing here detects a conversation change itself. */
@@ -62,5 +64,6 @@ export function useChatThread(conversationId: string, senderId: string): UseChat
     retryMessage,
     loadOlderMessages,
     hasMoreOlderMessages,
+    forceSync,
   };
 }

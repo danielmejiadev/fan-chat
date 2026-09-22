@@ -1,6 +1,11 @@
 import { getDatabase } from "@/lib/database";
 import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
-import type { ClientMessage, MessageStatus, ServerMessage } from "@/features/chat/types";
+import type {
+  ClientMessage,
+  MessageFailureReason,
+  MessageStatus,
+  ServerMessage,
+} from "@/features/chat/types";
 
 /**
  * pending_messages: the local outbox, written before a message is ever sent
@@ -20,7 +25,8 @@ export function initChatSchema(): void {
       conversationId TEXT NOT NULL,
       text TEXT NOT NULL,
       createdAt INTEGER NOT NULL,
-      status TEXT NOT NULL
+      status TEXT NOT NULL,
+      failureReason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS accepted_client_ids (
@@ -45,6 +51,17 @@ export function initChatSchema(): void {
   `);
 }
 
+/** Wipes every chat table — used by the demo's reset action, never in normal app flow. */
+export function clearChatData(): void {
+  const database = getDatabase();
+
+  database.execSync(`
+    DELETE FROM pending_messages;
+    DELETE FROM accepted_client_ids;
+    DELETE FROM messages;
+  `);
+}
+
 export function createSqliteChatStore(): ChatStore {
   const database = getDatabase();
 
@@ -63,11 +80,20 @@ export function createSqliteChatStore(): ChatStore {
       );
     },
 
-    updatePendingMessageStatus(clientId: string, status: MessageStatus): void {
-      database.runSync(`UPDATE pending_messages SET status = $status WHERE clientId = $clientId`, {
-        $status: status,
-        $clientId: clientId,
-      });
+    updatePendingMessageStatus(
+      clientId: string,
+      status: MessageStatus,
+      failureReason?: MessageFailureReason,
+    ): void {
+      database.runSync(
+        `UPDATE pending_messages SET status = $status, failureReason = $failureReason
+         WHERE clientId = $clientId`,
+        {
+          $status: status,
+          $failureReason: failureReason ?? null,
+          $clientId: clientId,
+        },
+      );
     },
 
     deletePendingMessage(clientId: string): void {
@@ -77,13 +103,20 @@ export function createSqliteChatStore(): ChatStore {
     },
 
     getPendingMessages(conversationId: string): ClientMessage[] {
-      return database.getAllSync<ClientMessage>(
-        `SELECT clientId, conversationId, text, createdAt, status
+      const rows = database.getAllSync<
+        ClientMessage & { failureReason: MessageFailureReason | null }
+      >(
+        `SELECT clientId, conversationId, text, createdAt, status, failureReason
          FROM pending_messages
          WHERE conversationId = $conversationId
          ORDER BY createdAt ASC`,
         { $conversationId: conversationId },
       );
+
+      return rows.map(({ failureReason, ...row }) => ({
+        ...row,
+        ...(failureReason !== null ? { failureReason } : {}),
+      }));
     },
 
     isClientIdAccepted(clientId: string): boolean {

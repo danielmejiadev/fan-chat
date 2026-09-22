@@ -14,11 +14,24 @@ export class ResponseLostError extends Error {
   }
 }
 
+/**
+ * Thrown when the backend refuses the content outright — never accepted, so
+ * there is nothing to reconcile on retry. Unlike ResponseLostError, retrying
+ * the same text is pointless; the UI must offer a different action instead
+ * of "tap to retry".
+ */
+export class ContentRejectedError extends Error {
+  constructor() {
+    super("The backend rejected this message's content");
+    this.name = "ContentRejectedError";
+  }
+}
+
 export type MockChatBackend = {
   submitMessage: (
     message: ClientMessage,
     senderId: string,
-    options?: { dropResponse?: boolean },
+    options?: { dropResponse?: boolean; rejectContent?: boolean },
   ) => ServerMessage;
   /**
    * The backend's canonical thread. A client only sees its own submissions
@@ -62,6 +75,10 @@ export function createMockChatBackend(
 
   return {
     submitMessage(message, senderId, options) {
+      if (options?.rejectContent === true) {
+        throw new ContentRejectedError();
+      }
+
       const existing = dedupeByClientId ? acceptedByClientId.get(message.clientId) : undefined;
 
       const serverMessage: ServerMessage = existing ?? {

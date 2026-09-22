@@ -1,14 +1,14 @@
 import {
   resetConversationBackends,
   setConversationBackendForTests,
-} from "@/features/chat/services/chatBackendRegistry";
+} from "@/mockApi/chat/chatBackendRegistry";
 import {
   enqueueMessage,
   flushPendingMessages,
   resetChatServiceStore,
   setChatServiceStoreForTests,
 } from "@/features/chat/services/chatService";
-import { createMockChatBackend } from "@/features/chat/services/mockChatBackend";
+import { createMockChatBackend } from "@/mockApi/chat/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
 import type { ClientMessage } from "@/features/chat/types";

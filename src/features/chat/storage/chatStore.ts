@@ -1,4 +1,9 @@
-import type { ClientMessage, MessageStatus, ServerMessage } from "@/features/chat/types";
+import type {
+  ClientMessage,
+  MessageFailureReason,
+  MessageStatus,
+  ServerMessage,
+} from "@/features/chat/types";
 
 /**
  * Keyset cursor for getThreadMessagesPage — (createdAt, serverId) rather
@@ -18,7 +23,11 @@ export type MessagePageCursor = {
  */
 export type ChatStore = {
   insertPendingMessage: (message: ClientMessage) => void;
-  updatePendingMessageStatus: (clientId: string, status: MessageStatus) => void;
+  updatePendingMessageStatus: (
+    clientId: string,
+    status: MessageStatus,
+    failureReason?: MessageFailureReason,
+  ) => void;
   deletePendingMessage: (clientId: string) => void;
   getPendingMessages: (conversationId: string) => ClientMessage[];
   isClientIdAccepted: (clientId: string) => boolean;

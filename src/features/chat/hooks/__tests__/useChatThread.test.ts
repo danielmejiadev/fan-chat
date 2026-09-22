@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react-native";
 import {
   resetConversationBackends,
   setConversationBackendForTests,
-} from "@/features/chat/services/chatBackendRegistry";
+} from "@/mockApi/chat/chatBackendRegistry";
 import {
   resetChatServiceStore,
   setChatServiceStoreForTests,

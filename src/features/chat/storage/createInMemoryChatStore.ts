@@ -15,10 +15,10 @@ export function createInMemoryChatStore(): ChatStore {
     insertPendingMessage(message) {
       pendingMessages.set(message.clientId, message);
     },
-    updatePendingMessageStatus(clientId, status) {
+    updatePendingMessageStatus(clientId, status, failureReason) {
       const existing = pendingMessages.get(clientId);
       if (existing !== undefined) {
-        pendingMessages.set(clientId, { ...existing, status });
+        pendingMessages.set(clientId, { ...existing, status, failureReason });
       }
     },
     deletePendingMessage(clientId) {

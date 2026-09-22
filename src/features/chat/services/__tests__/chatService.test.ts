@@ -1,7 +1,7 @@
 import {
   resetConversationBackends,
   setConversationBackendForTests,
-} from "@/features/chat/services/chatBackendRegistry";
+} from "@/mockApi/chat/chatBackendRegistry";
 import {
   enqueueMessage,
   flushPendingMessages,
@@ -16,7 +16,7 @@ import {
   createMockChatBackend,
   ResponseLostError,
   type MockChatBackend,
-} from "@/features/chat/services/mockChatBackend";
+} from "@/mockApi/chat/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import { MessageStatus, type ServerMessage } from "@/features/chat/types";
 

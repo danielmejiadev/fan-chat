@@ -1,6 +1,7 @@
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { DemoResetButton } from "@/components/DemoResetButton";
 import { Text } from "@/components/ui/Text";
 import { Conversations } from "@/features/chat/components/conversations/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
@@ -29,6 +30,7 @@ export default function ChatListScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
       <Conversations />
+      <DemoResetButton variant="floating" />
       <MobileTabBar activeTab="feed" />
     </SafeAreaView>
   );

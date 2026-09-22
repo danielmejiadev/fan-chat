@@ -35,6 +35,16 @@ export function initPurchasesSchema(): void {
   `);
 }
 
+/** Wipes every purchases table — used by the demo's reset action, never in normal app flow. */
+export function clearPurchasesData(): void {
+  const database = getDatabase();
+
+  database.execSync(`
+    DELETE FROM store_purchases;
+    DELETE FROM purchase_confirmations;
+  `);
+}
+
 export function createSqlitePurchaseStore(): PurchaseStore {
   const database = getDatabase();
 

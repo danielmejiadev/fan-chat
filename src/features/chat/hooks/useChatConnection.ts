@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
-import { mockChatConnection } from "@/features/chat/services/mockChatConnection";
+import { mockChatConnection } from "@/mockApi/chat/mockChatConnection";
 
 export type UseChatConnectionResult = {
   forceSync: () => void;

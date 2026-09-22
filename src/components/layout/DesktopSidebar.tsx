@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
 
+import { DemoResetButton } from "@/components/DemoResetButton";
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { SidebarItem } from "@/components/layout/SidebarItem";
@@ -29,6 +30,7 @@ export function DesktopSidebar() {
           <Icon name="add" size={16} className="text-[#FAFAFA]" />
           <Text className="text-h5 font-sans-medium text-white">Become a Creator</Text>
         </Pressable>
+        <DemoResetButton variant="sidebar" />
       </View>
       <View className="flex-row items-center gap-2 px-2">
         <View className="h-8 w-8 items-center justify-center rounded-full bg-surface-muted">

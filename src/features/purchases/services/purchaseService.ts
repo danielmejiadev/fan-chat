@@ -1,4 +1,4 @@
-import { getPurchaseBackend } from "@/features/purchases/services/purchaseBackendRegistry";
+import { getPurchaseBackend } from "@/mockApi/purchases/purchaseBackendRegistry";
 import { createSqlitePurchaseStore } from "@/features/purchases/storage/purchasesDatabase";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
 import {
@@ -7,7 +7,7 @@ import {
   type PurchaseConfirmation,
   type StorePurchase,
 } from "@/features/purchases/types";
-import type { PurchaseAttemptOutcome } from "@/features/purchases/services/mockPurchaseBackend";
+import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBackend";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: PurchaseStore | null = null;
