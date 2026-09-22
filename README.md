@@ -50,7 +50,7 @@ pnpm test       # Jest
 
 ## Architecture
 
-Visual diagram: **[Fan Chat Architecture](https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1)**.
+![Architecture](docs/design/architecture.svg)
 
 The app is split into five layers, and every dependency between them points
 in one direction only (UI → Hooks → Services → Storage / mockApi). That's
@@ -148,3 +148,58 @@ the screen instead of only from a test:
   conversation list on mobile — always visible, not `__DEV__`-gated, since
   the task asks for a reset action) — wipes every chat/purchase table and
   drops the in-memory mock backends, so each recording starts clean.
+
+### Technical implementation notes
+
+- **Idempotent messaging by `clientId`.** `enqueueMessage`
+  (`src/features/chat/services/chatService.ts`) writes a message to the
+  local outbox, keyed by a stable `clientId` generated up front, before any
+  network attempt. `flushPendingMessages` reuses that same `clientId` on
+  every retry; the mock backend dedupes by it (`accepted_client_ids`), so a
+  lost response followed by a retry never produces a duplicate message no
+  matter how many times it's replayed.
+- **SQLite-backed pending-message persistence.** A pending message becomes
+  a row in the SQLite `pending_messages` table the instant `enqueueMessage`
+  runs — never just a value sitting in a JS variable — so it survives a
+  force-quit. `ChatStore`/`PurchaseStore` (`src/features/*/storage/`) are
+  typed contracts implemented once against SQLite (via Drizzle ORM) for the
+  real app and once fully in memory for Jest, which can't load a native
+  SQLite binary.
+- **Keyset pagination for the 50k-message dataset.** `getThreadMessagesPage`
+  paginates by `(createdAt, serverId)` instead of offset, verified against
+  the full 50k-message seeded dataset with no gaps or duplicates
+  (`chatStorePagination.test.ts`). `MessagesList` renders it with
+  `@shopify/flash-list` and loads older pages via
+  `onStartReached`/`useChatThread.loadOlderMessages` in a growing window.
+- **Two-phase purchase state.** `purchaseService.ts` keeps a purchase's
+  store result (`processPurchase` — succeeded/failed/canceled) and its
+  backend entitlement confirmation (`confirmPurchase`) as two separate,
+  independently-timed steps — a succeeded purchase with no confirmation yet
+  reads as `Pending`, never `Active`. `useGiftPurchase` exposes this as an
+  explicit `idle → pending → pending-confirmation → confirmed/failed/canceled`
+  state machine so the UI can show the real in-between state instead of
+  optimistically granting access on payment alone.
+- **SQLite on web (`SharedArrayBuffer`/`Sync operation timeout`).** Opening
+  `expo-sqlite` in a browser initially failed with a missing
+  `SharedArrayBuffer`, then with a `Sync operation timeout` even after
+  COOP/COEP headers were added — the web backend's "synchronous" API is
+  actually an `Atomics` busy-wait against a Web Worker, and the first,
+  slow `openDatabaseSync` was running too early to give the worker time to
+  initialize. Fixed by moving database setup behind an async bootstrap
+  step (`useAppReady`, `src/app/_layout.tsx`) that the rest of the app
+  awaits before rendering. Full root-cause writeup in `PLAN.md`, under
+  "Resuelto: `expo-sqlite` en web".
+
+### Known limitations / not yet done
+
+Tracked in detail in `PLAN.md`'s phase checklists — pulled out here so
+they're not missed:
+
+- Performance profiling on the 50k-message conversation (frame timing,
+  dropped frames, memory) has not been run yet — it needs a real
+  Simulator/device session.
+- No screen recordings of the required messaging/purchase scenarios exist
+  yet.
+- The design kit (colors, typography, dark mode) has been verified via
+  typecheck/lint/tests/`expo export`, but not visually reviewed on screen
+  against the Figma source.
