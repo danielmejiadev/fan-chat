@@ -1,14 +1,14 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "208b167b-acb7-4167-aacf-296267fd2600",
+  "id": "75928e8c-059e-4826-a70e-ce247ebf2c99",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "accepted_client_ids": {
-      "name": "accepted_client_ids",
+    "messages": {
+      "name": "messages",
       "columns": {
-        "clientId": {
-          "name": "clientId",
+        "id": {
+          "name": "id",
           "type": "text",
           "primaryKey": true,
           "notNull": true,
@@ -18,24 +18,7 @@
           "name": "serverId",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "messages": {
-      "name": "messages",
-      "columns": {
-        "serverId": {
-          "name": "serverId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "clientId": {
@@ -72,53 +55,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_messages_conversation": {
-          "name": "idx_messages_conversation",
-          "columns": [
-            "conversationId",
-            "createdAt"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "pending_messages": {
-      "name": "pending_messages",
-      "columns": {
-        "clientId": {
-          "name": "clientId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "conversationId": {
-          "name": "conversationId",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "status": {
           "name": "status",
@@ -136,11 +72,19 @@
         }
       },
       "indexes": {
-        "idx_pending_messages_conversation": {
-          "name": "idx_pending_messages_conversation",
+        "idx_messages_conversation_created": {
+          "name": "idx_messages_conversation_created",
           "columns": [
             "conversationId",
             "createdAt"
+          ],
+          "isUnique": false
+        },
+        "idx_messages_conversation_status": {
+          "name": "idx_messages_conversation_status",
+          "columns": [
+            "conversationId",
+            "status"
           ],
           "isUnique": false
         }
