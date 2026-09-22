@@ -8,13 +8,11 @@ import { IconButton } from "@/components/ui/IconButton";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
 import { formatUsdFromCents } from "@/features/purchases/constants/giftAmounts";
-import { DebugOutcomeSelector } from "@/features/purchases/components/DebugOutcomeSelector";
 import { GiftAmountSelector } from "@/features/purchases/components/GiftAmountSelector";
 import { GiftModalHeader } from "@/features/purchases/components/GiftModalHeader";
 import { GiftPaymentDetailsForm } from "@/features/purchases/components/GiftPaymentDetailsForm";
 import { PaymentMethodSelector } from "@/features/purchases/components/PaymentMethodSelector";
 import { useGiftPurchase } from "@/features/purchases/hooks/useGiftPurchase";
-import { StorePurchaseStatus } from "@/features/purchases/types";
 import { giftFormSchema, type GiftFormValues } from "@/features/purchases/utils/giftFormSchema";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
@@ -37,7 +35,6 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
       email: "ethanss@gmail.com",
       amountCents: 0,
       paymentMethod: "card",
-      debugOutcome: StorePurchaseStatus.Succeeded,
     },
   });
   const { state, errorMessage, pay, reset } = useGiftPurchase(
@@ -58,7 +55,7 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
   }, [state, selectedAmountCents, onGiftSent, reset, onClose]);
 
   const onSubmit = (values: GiftFormValues) => {
-    void pay(values.amountCents, values.debugOutcome);
+    void pay(values.amountCents);
   };
 
   return (
@@ -98,13 +95,6 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
                       onSelect={field.onChange}
                       errorMessage={errors.amountCents?.message}
                     />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="debugOutcome"
-                  render={({ field }) => (
-                    <DebugOutcomeSelector selectedOutcome={field.value} onSelect={field.onChange} />
                   )}
                 />
               </View>

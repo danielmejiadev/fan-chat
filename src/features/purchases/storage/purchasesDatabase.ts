@@ -1,20 +1,15 @@
 import { eq } from "drizzle-orm";
 
 import { getAppDatabase } from "@/lib/database";
-import { purchaseConfirmations, storePurchases } from "@/features/purchases/storage/schema";
+import { storePurchases } from "@/features/purchases/storage/schema";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
-import type {
-  PurchaseConfirmation,
-  StorePurchase,
-  StorePurchaseStatus,
-} from "@/features/purchases/types";
+import type { StorePurchase, StorePurchaseStatus } from "@/features/purchases/types";
 
-/** Wipes every purchases table — used by the demo's reset action, never in normal app flow. */
+/** Wipes the purchases table — used by the demo's reset action, never in normal app flow. */
 export async function clearPurchasesData(): Promise<void> {
   const database = getAppDatabase();
 
   await database.delete(storePurchases);
-  await database.delete(purchaseConfirmations);
 }
 
 export function createSqlitePurchaseStore(): PurchaseStore {
@@ -48,27 +43,6 @@ export function createSqlitePurchaseStore(): PurchaseStore {
         .orderBy(storePurchases.createdAt);
 
       return rows as StorePurchase[];
-    },
-
-    async upsertConfirmation(confirmation: PurchaseConfirmation): Promise<void> {
-      await database
-        .insert(purchaseConfirmations)
-        .values(confirmation)
-        .onConflictDoUpdate({
-          target: purchaseConfirmations.purchaseId,
-          set: {
-            entitlementStatus: confirmation.entitlementStatus,
-            confirmedAt: confirmation.confirmedAt,
-          },
-        });
-    },
-
-    async getConfirmation(purchaseId: string): Promise<PurchaseConfirmation | undefined> {
-      const row = await database.query.purchaseConfirmations.findFirst({
-        where: eq(purchaseConfirmations.purchaseId, purchaseId),
-      });
-
-      return row as PurchaseConfirmation | undefined;
     },
   };
 }

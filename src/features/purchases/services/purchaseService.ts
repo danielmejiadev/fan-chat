@@ -1,13 +1,7 @@
 import { getPurchaseBackend } from "@/mockApi/purchases/purchaseBackendRegistry";
 import { createSqlitePurchaseStore } from "@/features/purchases/storage/purchasesDatabase";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
-import {
-  EntitlementStatus,
-  StorePurchaseStatus,
-  type PurchaseConfirmation,
-  type StorePurchase,
-} from "@/features/purchases/types";
-import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBackend";
+import { StorePurchaseStatus, type StorePurchase } from "@/features/purchases/types";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: PurchaseStore | null = null;
@@ -64,94 +58,14 @@ export async function initiatePurchase(
   return purchase;
 }
 
-/**
- * Sends a Pending purchase to the mock store and records its result
- * (succeeded, canceled or failed). This is only the store's response —
- * access is never granted from this alone, see confirmPurchase.
- */
+/** Sends a Pending purchase to the mock store and records its result. */
 export async function processPurchase(
   purchase: StorePurchase,
   userId: string,
-  options?: { outcome?: PurchaseAttemptOutcome },
 ): Promise<StorePurchase> {
-  const resolvedPurchase = getPurchaseBackend().purchase(purchase, userId, options);
+  const resolvedPurchase = getPurchaseBackend().purchase(purchase, userId);
 
   await resolveStore().updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
 
   return resolvedPurchase;
-}
-
-/**
- * Asks the mock backend to confirm entitlement for an already-succeeded
- * purchase — the separate, possibly-delayed step that actually grants
- * access. Upserted by purchaseId, so a duplicate confirmation event (e.g. a
- * repeated webhook) never grants access twice.
- */
-export async function confirmPurchase(purchaseId: string): Promise<PurchaseConfirmation> {
-  const confirmation = getPurchaseBackend().confirmEntitlement(purchaseId);
-
-  await resolveStore().upsertConfirmation(confirmation);
-
-  return confirmation;
-}
-
-/**
- * Reconciles a user's previously-succeeded purchases (e.g. after a
- * reinstall) without duplicating local state: both the purchase and its
- * confirmation are upserted by their primary key, so restoring the same
- * purchase twice has no further effect.
- */
-export async function restorePurchases(userId: string): Promise<StorePurchase[]> {
-  const purchaseStore = resolveStore();
-  const restoredPurchases = getPurchaseBackend().restorePurchases(userId);
-
-  for (const restoredPurchase of restoredPurchases) {
-    await purchaseStore.insertPurchase(restoredPurchase);
-    await purchaseStore.upsertConfirmation({
-      purchaseId: restoredPurchase.purchaseId,
-      entitlementStatus: EntitlementStatus.Active,
-      confirmedAt: Date.now(),
-    });
-  }
-
-  return restoredPurchases;
-}
-
-/**
- * The product's access, aggregated across every purchase made for it. Active
- * as soon as any purchase for the product is confirmed active — an older
- * revoked purchase or an unrelated failed one for the same product never
- * demotes it. A succeeded purchase with no confirmation yet reads as
- * Pending, never Active — that is the honest "delayed confirmation" state.
- */
-export async function getEntitlementStatus(productId: string): Promise<EntitlementStatus> {
-  const purchaseStore = resolveStore();
-  const purchasesForProduct = await purchaseStore.getPurchasesForProduct(productId);
-
-  const confirmationResults = await Promise.all(
-    purchasesForProduct.map((purchase) => purchaseStore.getConfirmation(purchase.purchaseId)),
-  );
-  const confirmations = confirmationResults.filter(
-    (confirmation): confirmation is PurchaseConfirmation => confirmation !== undefined,
-  );
-
-  if (
-    confirmations.some(
-      (confirmation) => confirmation.entitlementStatus === EntitlementStatus.Active,
-    )
-  ) {
-    return EntitlementStatus.Active;
-  }
-
-  const hasUnresolvedPurchase = purchasesForProduct.some(
-    (purchase) =>
-      purchase.status === StorePurchaseStatus.Pending ||
-      purchase.status === StorePurchaseStatus.Succeeded,
-  );
-
-  if (hasUnresolvedPurchase) {
-    return EntitlementStatus.Pending;
-  }
-
-  return EntitlementStatus.Revoked;
 }

@@ -12,14 +12,3 @@ export const storePurchases = sqliteTable("store_purchases", {
   status: text("status").notNull(),
   createdAt: integer("createdAt").notNull(),
 });
-
-/**
- * The mock backend's entitlement decision, kept in its own table so a
- * purchase can be "succeeded" at the store while access is still "pending"
- * here — the two are never conflated.
- */
-export const purchaseConfirmations = sqliteTable("purchase_confirmations", {
-  purchaseId: text("purchaseId").primaryKey(),
-  entitlementStatus: text("entitlementStatus").notNull(),
-  confirmedAt: integer("confirmedAt"),
-});
