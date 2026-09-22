@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Modal, View } from "react-native";
+import { Modal, ScrollView, View } from "react-native";
 import { clsx } from "clsx";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -78,62 +78,64 @@ export function GiftModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center bg-black/20 p-4">
         <View
-          className={clsx("max-h-[90%] w-full rounded-2xl bg-surface p-6", {
+          className={clsx("max-h-[90%] w-full overflow-hidden rounded-2xl bg-surface p-6", {
             "max-w-[720px]": isDesktop,
             "max-w-md": !isDesktop,
           })}
         >
           <GiftModalHeader conversation={conversation} />
 
-          <View className={clsx({ "flex-row gap-8": isDesktop, "gap-6": !isDesktop })}>
-            <View className="flex-1 gap-4">
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View className={clsx({ "flex-row gap-8": isDesktop, "gap-6": !isDesktop })}>
+              <View className="flex-1 gap-4">
+                <Controller
+                  control={control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <PaymentMethodSelector selectedMethod={field.value} onSelect={field.onChange} />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="amountCents"
+                  render={({ field }) => (
+                    <GiftAmountSelector
+                      selectedAmountCents={field.value}
+                      onSelect={field.onChange}
+                      errorMessage={errors.amountCents?.message}
+                    />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="debugOutcome"
+                  render={({ field }) => (
+                    <DebugOutcomeSelector
+                      selectedOutcome={field.value}
+                      onSelect={field.onChange}
+                      onRestore={() => void handleRestore()}
+                    />
+                  )}
+                />
+              </View>
+
               <Controller
                 control={control}
-                name="paymentMethod"
+                name="email"
                 render={({ field }) => (
-                  <PaymentMethodSelector selectedMethod={field.value} onSelect={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="amountCents"
-                render={({ field }) => (
-                  <GiftAmountSelector
-                    selectedAmountCents={field.value}
-                    onSelect={field.onChange}
-                    errorMessage={errors.amountCents?.message}
-                  />
-                )}
-              />
-              <Controller
-                control={control}
-                name="debugOutcome"
-                render={({ field }) => (
-                  <DebugOutcomeSelector
-                    selectedOutcome={field.value}
-                    onSelect={field.onChange}
-                    onRestore={() => void handleRestore()}
+                  <GiftPaymentDetailsForm
+                    email={field.value}
+                    onEmailChange={field.onChange}
+                    emailError={errors.email?.message}
+                    amountCents={selectedAmountCents}
+                    state={state}
+                    errorMessage={errorMessage}
+                    onPay={() => void handleSubmit(onSubmit)()}
                   />
                 )}
               />
             </View>
-
-            <Controller
-              control={control}
-              name="email"
-              render={({ field }) => (
-                <GiftPaymentDetailsForm
-                  email={field.value}
-                  onEmailChange={field.onChange}
-                  emailError={errors.email?.message}
-                  amountCents={selectedAmountCents}
-                  state={state}
-                  errorMessage={errorMessage}
-                  onPay={() => void handleSubmit(onSubmit)()}
-                />
-              )}
-            />
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
