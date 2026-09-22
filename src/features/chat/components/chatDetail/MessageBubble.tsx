@@ -84,9 +84,6 @@ export function MessageBubble({
           Can&apos;t be sent — remove the flagged content
         </Text>
       )}
-      {status === MessageStatus.Pending && (
-        <Text className="mt-1 text-caption text-foreground-secondary">Sending…</Text>
-      )}
     </View>
   );
 }
