@@ -13,9 +13,10 @@ const QUICK_REACTIONS = ["🔥", "❤️", "😍", "😂", "😮", "😢", "🙏
 interface MessageInputProps {
   onSend: (text: string) => void;
   onOpenGift: () => void;
+  onFocus?: () => void;
 }
 
-export function MessageInput({ onSend, onOpenGift }: MessageInputProps) {
+export function MessageInput({ onSend, onOpenGift, onFocus }: MessageInputProps) {
   const isDesktop = useIsDesktopLayout();
   const [draftText, setDraftText] = useState("");
 
@@ -55,6 +56,7 @@ export function MessageInput({ onSend, onOpenGift }: MessageInputProps) {
             maxLength={MESSAGE_CHARACTER_LIMIT}
             className="flex-1 text-body text-foreground-primary"
             onSubmitEditing={handleSend}
+            onFocus={onFocus}
           />
         </View>
         <IconButton

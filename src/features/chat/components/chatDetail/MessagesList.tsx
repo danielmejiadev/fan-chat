@@ -1,5 +1,8 @@
+import type { ForwardedRef } from "react";
+import { forwardRef } from "react";
 import { View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
+import type { FlashListRef } from "@shopify/flash-list";
 
 import { Text } from "@/components/ui/Text";
 import { MessageBubble } from "@/features/chat/components/chatDetail/MessageBubble";
@@ -13,15 +16,14 @@ interface MessagesListProps {
   onRetryMessage: (id: string) => void;
 }
 
-export function MessagesList({
-  messages,
-  conversation,
-  onLoadOlderMessages,
-  onRetryMessage,
-}: MessagesListProps) {
+function MessagesListInner(
+  { messages, conversation, onLoadOlderMessages, onRetryMessage }: MessagesListProps,
+  ref: ForwardedRef<FlashListRef<Message>>,
+) {
   return (
     <View className="flex-1">
       <FlashList
+        ref={ref}
         data={messages}
         keyExtractor={(message) => message.id}
         onStartReached={onLoadOlderMessages}
@@ -46,3 +48,5 @@ export function MessagesList({
     </View>
   );
 }
+
+export const MessagesList = forwardRef(MessagesListInner);
