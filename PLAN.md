@@ -450,6 +450,104 @@ para el historial del bug de SQLite en web.
   confirmar en esta sesión — ver reporte de la sesión para el detalle de
   qué se confirmó realmente en navegador vs. solo por tests/código.
 
+### Resuelto: colapsado el modelo de dos tablas (`pendingMessages`/`messages`) en una sola `messages`
+
+- **Motivación**: tras revisar `useChatThread.ts`/`usePendingMessages.ts`/
+  `useConfirmedMessages.ts`, el split en dos tablas/dos hooks era la causa
+  raíz de tres cosas que existían solo para mantenerlas sincronizadas:
+  - `useChatThread.refresh` tenía que llamar
+    `refreshConfirmedMessages().then(() => refreshPendingMessages())` en
+    ese orden exacto — si no, había una ventana donde un mensaje recién
+    confirmado ya no estaba en `pendingMessages` (borrado) pero todavía no
+    aparecía en `confirmedMessages` (la lectura no había resuelto), y su
+    burbuja desaparecía un instante de la lista.
+  - Cada hook tenía su propio guard `latestRequestId` contra lecturas que
+    resuelven fuera de orden — la misma lógica, duplicada dos veces.
+  - `mergeThreadMessages.ts` existía solo para intercalar dos arrays en
+    una lista cronológica.
+  Con una sola tabla y un solo array, las tres dejan de tener sentido: no
+  hay dos fuentes que reconciliar, así que no hay orden que respetar, no
+  hay dos guards que mantener, y no hay nada que intercalar.
+- **Esquema nuevo** (`src/features/chat/storage/schema.ts`), una tabla
+  `messages`:
+  ```
+  id             TEXT PRIMARY KEY   -- clientId si se originó en este device, si no serverId
+  serverId       TEXT NULL          -- NULL hasta que el backend lo confirma
+  clientId       TEXT NULL          -- NULL si vino del otro participante
+  conversationId TEXT NOT NULL
+  senderId       TEXT NOT NULL
+  text           TEXT NOT NULL
+  createdAt      INTEGER NOT NULL
+  status         TEXT NOT NULL      -- Pending | Sent | Confirmed | Failed
+  failureReason  TEXT NULL
+  ```
+  `id` se fija una sola vez, al crear la fila, y no cambia nunca — cada
+  transición después de eso (`enqueueMessage` → `flushPendingMessages` →
+  `receiveMessages`) es un solo `UPDATE` por ese `id`, nunca un
+  insert-then-delete. Esto elimina por construcción la ventana de "no está
+  en ninguna de las dos tablas" que causaba el flicker.
+- **`types.ts`**: `ClientMessage`/`ServerMessage`/`ThreadMessage` colapsan
+  en un solo `Message` (status/failureReason siempre presentes, aunque
+  sean `null`). `MessageStatus` gana el valor `Confirmed` (antes solo
+  vivía implícito en "estar en la tabla `messages` en vez de
+  `pendingMessages`"). `mergeThreadMessages.ts` se borró.
+- **`ChatStore`** (`chatStore.ts`/`chatDatabase.ts`/
+  `createInMemoryChatStore.ts`): el contrato baja de 9 métodos a 5 —
+  `insertMessage`, `insertMessages` (bulk seed), `updateMessage`,
+  `getNonConfirmedMessages` (Pending/Sent/Failed, siempre completo — nunca
+  son más que un puñado a la vez) y `getConfirmedMessagesPage`
+  (paginado). La paginación por keyset de mensajes confirmados
+  (`createdAt`, `serverId`) se mantuvo idéntica a la original — verificado
+  con el dataset de 50k mensajes (`chatStorePagination.test.ts`,
+  `perfTestSeed.test.ts`).
+- **`useMessages.ts`** (nuevo) reemplaza `usePendingMessages.ts` +
+  `useConfirmedMessages.ts`: una sola suscripción, un solo
+  `latestRequestId`, devuelve un único array ordenado cronológicamente
+  (mensajes confirmados paginados + no confirmados completos, resueltos en
+  paralelo con `Promise.all`).
+- **`useChatThread.ts`**: pasa de 76 a 45 líneas. Desaparecen: el import y
+  la llamada a `mergeThreadMessages`, el `refresh` de dos pasos
+  encadenados, y los dos hooks (`usePendingMessages`/`useConfirmedMessages`)
+  reemplazados por uno (`useMessages`). Lo que queda es
+  `useMessages` + `useChatConnection` + tres callbacks finos
+  (`submit`/`sendMessage`/`retryMessage`).
+- **`MessageBubble.tsx`/`getMessageDeliveryTick.ts`**: `isOwnMessage` pasa
+  de `origin === "client" || senderId === CURRENT_FAN_ID` a un único
+  `clientId !== null` (un mensaje propio siempre tiene clientId, incluso
+  ya confirmado — un mensaje del otro participante nunca lo tiene). El
+  tick de entrega pasa de ramificar en `origin` + `status` a ramificar
+  solo en `status` (`Pending`→reloj, `Sent`→check simple,
+  `Confirmed`→doble check, `Failed`→alerta).
+- **`mockChatBackend.ts`**: `submitMessage`/`listMessages`/
+  `receiveIncomingMessage` ahora hablan `Message` en vez de
+  `ClientMessage`/`ServerMessage` — sin cambios de comportamiento, solo de
+  tipo.
+- **Test de "bug reproducido" reescrito**
+  (`chatService.test.ts`, describe "a non-deduping backend creates a
+  duplicate server-side"): con el modelo viejo, un backend que no
+  dedupea por `clientId` producía un thread local visiblemente duplicado
+  (2 filas en la tabla `messages`). Con el modelo nuevo eso ya no puede
+  pasar del lado del cliente: como la reconciliación es un `UPDATE` por
+  `id` fijo, una segunda confirmación con el mismo `clientId` solo
+  vuelve a actualizar la misma fila. El test ahora verifica ambas cosas:
+  el backend sigue teniendo el bug internamente
+  (`backend.listMessages()` con 2 mensajes), pero
+  `getConfirmedThread()` del lado del cliente solo muestra 1 — una mejora
+  real de robustez, no una regresión de cobertura.
+- **Migración SQLite**: `drizzle/app/0001_yellow_shape.sql` — dropea
+  `pending_messages`/`accepted_client_ids` y recrea `messages` con las
+  columnas nuevas. Escrita a mano después de `drizzle-kit generate`
+  porque el generador intentaba preservar datos columna por columna desde
+  la `messages` vieja (esquema distinto, sin `id`/`status`/
+  `failureReason`) — al ser una demo pre-lanzamiento sin datos reales que
+  conservar, un `DROP`+`CREATE` limpio es más simple y correcto.
+- **Verificación**: `pnpm run typecheck`, `pnpm run lint` y `pnpm test`
+  limpios (37/37 — un test más que antes, cobertura extra de
+  "getConfirmedMessagesPage nunca devuelve mensajes no confirmados").
+  `chatStorePagination.test.ts`/`perfTestSeed.test.ts` reverificados
+  específicamente contra el dataset de 50k mensajes tras el cambio de
+  capa de storage: mismo comportamiento pass/fail.
+
 ## Reglas de identidad y git (siempre aplican)
 
 - Nunca `Co-Authored-By` ni atribución de IA en commits/PRs.

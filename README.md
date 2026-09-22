@@ -70,13 +70,14 @@ conditional styling (pending/failed/offline states) lives here as plain
 ### Hooks — `src/features/*/hooks/`, `src/hooks/`
 
 The client-side glue layer: local React state and optimistic updates.
-`useChatThread` doesn't own all of this itself — it composes three smaller
-hooks:
+`useChatThread` composes two smaller hooks:
 
-- `useConfirmedMessages` — the paginated, server-confirmed window of the
-  thread.
-- `usePendingMessages` — the local outbox (messages this device queued but
-  the backend hasn't confirmed).
+- `useMessages` — the single source of truth for a conversation's thread:
+  one subscription, one stale-read guard, one chronologically sorted
+  array. Confirmed messages paginate via a keyset window; every
+  Pending/Sent/Failed message is always included in full alongside
+  whatever confirmed page is loaded, since there are only ever a handful
+  of those at once.
 - `useChatConnection` — opens/closes the mock connection on
   mount/unmount and re-renders whenever it reports something new. It has
   nothing else to expose: the connection itself is fully event-driven and
@@ -113,8 +114,19 @@ once against `expo-sqlite` for the real app (`chatDatabase.ts`,
 native SQLite binary (`createInMemoryChatStore.ts`). Services only ever
 depend on the contract, never on which implementation is behind it — that's
 what makes a pending message survive a force-quit: the moment
-`enqueueMessage` runs, it's a row in `pending_messages`, not a value sitting
-in a JS variable that dies with the process.
+`enqueueMessage` runs, it's a row in the single `messages` table, not a
+value sitting in a JS variable that dies with the process.
+
+Chat storage is one table, `messages` — a message is written once
+(`INSERT`, `id` = its `clientId` if it originated on this device, else its
+`serverId`) and every later state change (Sent, Confirmed, Failed) is an
+`UPDATE` of that same row by `id`, never an insert into a different table
+followed by a delete. Earlier this was two tables (`pending_messages` for
+the local outbox, `messages` for the server-confirmed thread, plus an
+`accepted_client_ids` idempotency table), which meant every read had to
+reconcile two arrays and there was a real window where a just-confirmed
+message existed in neither — see `PLAN.md` for the full writeup of why
+that was collapsed.
 
 ### mockApi — `src/mockApi/chat/`, `src/mockApi/purchases/`
 
@@ -122,10 +134,10 @@ Everything that stands in for a real backend, kept in its own top-level
 folder instead of inside `services/` — this is the one layer a real API
 integration would replace outright, without touching anything above it:
 
-- `mockChatBackend.ts` — accepts sends, remembers `accepted_client_ids` for
-  idempotency, and can be told to drop a response or reject a message's
-  content outright (used by the demo controls to reproduce the required
-  failure scenarios on demand).
+- `mockChatBackend.ts` — accepts sends, remembers confirmed messages by
+  `clientId` in memory for idempotency, and can be told to drop a response
+  or reject a message's content outright (used by the demo controls to
+  reproduce the required failure scenarios on demand).
 - `mockChatConnection.ts` — event-driven, like a real socket/channel
   subscription: `mockChatBackend.subscribe()` notifies it the moment a
   message actually joins the canonical thread, instead of polling on a
@@ -158,23 +170,25 @@ the screen instead of only from a test:
 
 ### Technical implementation notes
 
-- **Idempotent messaging by `clientId`.** `enqueueMessage`
-  (`src/features/chat/services/chatService.ts`) writes a message to the
-  local outbox, keyed by a stable `clientId` generated up front, before any
-  network attempt. `flushPendingMessages` reuses that same `clientId` on
-  every retry; the mock backend dedupes by it (`accepted_client_ids`), so a
-  lost response followed by a retry never produces a duplicate message no
-  matter how many times it's replayed.
-- **SQLite-backed pending-message persistence.** A pending message becomes
-  a row in the SQLite `pending_messages` table the instant `enqueueMessage`
-  runs — never just a value sitting in a JS variable — so it survives a
-  force-quit. `ChatStore`/`PurchaseStore` (`src/features/*/storage/`) are
-  typed contracts implemented once against SQLite (via Drizzle ORM) for the
-  real app and once fully in memory for Jest, which can't load a native
-  SQLite binary.
-- **Keyset pagination for the 50k-message dataset.** `getThreadMessagesPage`
-  paginates by `(createdAt, serverId)` instead of offset, verified against
-  the full 50k-message seeded dataset with no gaps or duplicates
+- **Idempotent messaging by a fixed `id`.** `enqueueMessage`
+  (`src/features/chat/services/chatService.ts`) writes a message row to
+  the store, keyed by a stable `id` (its `clientId`) generated up front,
+  before any network attempt. `flushPendingMessages` reuses that same `id`
+  on every retry; the mock backend dedupes by it, and reconciliation
+  (`receiveMessages`) always resolves a confirmation back to that same row
+  by `UPDATE`, so a lost response followed by a retry never produces a
+  duplicate message no matter how many times it's replayed.
+- **SQLite-backed message persistence.** A message becomes a row in the
+  single SQLite `messages` table the instant `enqueueMessage` runs — never
+  just a value sitting in a JS variable — so it survives a force-quit.
+  `ChatStore`/`PurchaseStore` (`src/features/*/storage/`) are typed
+  contracts implemented once against SQLite (via Drizzle ORM) for the real
+  app and once fully in memory for Jest, which can't load a native SQLite
+  binary.
+- **Keyset pagination for the 50k-message dataset.**
+  `getConfirmedMessagesPage` paginates Confirmed messages by
+  `(createdAt, serverId)` instead of offset, verified against the full
+  50k-message seeded dataset with no gaps or duplicates
   (`chatStorePagination.test.ts`). `MessagesList` renders it with
   `@shopify/flash-list` and loads older pages via
   `onStartReached`/`useChatThread.loadOlderMessages` in a growing window.
