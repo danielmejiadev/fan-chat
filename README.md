@@ -50,7 +50,7 @@ pnpm test       # Jest
 
 ## Architecture
 
-![Architecture](docs/design/architecture.svg)
+Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
 The app is split into five layers, and every dependency between them points
 in one direction only (UI → Hooks → Services → Storage / mockApi). That's
