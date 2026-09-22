@@ -53,7 +53,7 @@ export function ChatDebugMenu({ conversationId, participantId, onForceSync }: Ch
         onPress={() => setIsOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="Open demo controls"
-        className="absolute bottom-24 right-4 h-12 w-12 items-center justify-center rounded-full bg-error shadow-lg"
+        className="absolute right-4 top-1/2 h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-error shadow-lg"
       >
         <Icon name="bug-outline" size={22} className="text-white" />
       </Pressable>
