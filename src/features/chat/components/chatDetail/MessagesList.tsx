@@ -31,6 +31,7 @@ function MessagesListInner(
         maintainVisibleContentPosition={{
           startRenderingFromBottom: true,
           autoscrollToBottomThreshold: 0.2,
+          animateAutoScrollToBottom: false,
         }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 24 }}
         ListHeaderComponent={
