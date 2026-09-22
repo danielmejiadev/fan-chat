@@ -89,9 +89,35 @@ reintentos).
   `ChatListHeader`) y `features/chat/components/chatDetail/` (`ThreadPane`,
   `MessagesList`, `MessageBubble`, `MessageInput`, `ChatThreadHeader`,
   `GiftRow`, `OfflineBanner`).
-- [ ] Demo seeding (`ensureDemoConversationSeeded`) y flujo completo
-  probados a mano end-to-end en Simulator/web tras el fix de SQLite en
-  progreso (ver "Work in progress" abajo) — bloqueado por ese bug.
+- [x] Demo seeding (`ensureDemoConversationSeeded`) y flujo completo
+  probados a mano end-to-end en web (Metro, vía Playwright headless):
+  abrir una conversación, enviar un mensaje y verlo pasar por los tres
+  estados de entrega, disparar "Drop next response"/retry desde
+  `ChatDebugMenu` y ver el estado failed. La app funciona correctamente;
+  sigue apareciendo el overlay rojo dev-only "Sync operation timeout" de
+  `expo-sqlite` en web (ver nota abajo), que no bloquea nada pero no se
+  investigó más a fondo por no ser parte de esta tarea.
+- [x] **Ticks de entrega estilo WhatsApp** (Pending → reloj, Sent → check
+  simple, Confirmed → doble check): el backend mock acepta el envío de
+  inmediato (`submitMessage` en `src/mockApi/chat/mockChatBackend.ts`
+  devuelve sincrónicamente) pero solo lo agrega a su hilo canónico
+  (`listMessages()`) tras un delay simulado
+  (`DEFAULT_CONFIRMATION_DELAY_MS = 600ms`, vía `setTimeout` dentro del
+  propio mock backend — no en `chatService` ni en el componente).
+  `chatService.flushPendingMessages` marca `Sent` al aceptar y ya no
+  inserta/borra el mensaje confirmado directamente; eso ahora lo hace
+  `receiveMessages()` cuando `syncThread` observa el mensaje en el hilo
+  del backend, que es también lo que borra la fila pendiente y produce el
+  salto a `origin: "server"` (double check). `mockChatConnection` agrega
+  un re-sync corto (`DEFAULT_CONFIRMATION_DELAY_MS + 100ms`) tras cada
+  envío para no esperar al poll de 5s. Cubierto por
+  `chatService.test.ts` (incluye un test nuevo que verifica que el
+  mensaje queda observable en `Sent` antes de confirmarse, con fake
+  timers) y `chatService.persistenceGuarantee.test.ts`, ambos verdes.
+  Iconos en `MessageBubble.tsx` vía `getMessageDeliveryTick.ts` (pura,
+  fuera del componente) + `Icon` (`cssInterop`d Ionicons). Verificado
+  visualmente en web (Playwright), luz y oscuro: el salto single→double
+  check se ve claramente unos ~700ms después de enviar.
 
 ## Fase 2 — Pagos y acceso pago (25%) ✅ funcional + UI
 
@@ -235,12 +261,21 @@ reintentos).
 
 ### Pendiente en Fase 4
 
-- [ ] Estados que el Figma no cubre explícitamente — revisar que
-  pending/failed/offline/gift-pending ya tengan tratamiento visual
-  consistente con el sistema de tokens (bubble con opacidad reducida +
-  ícono de reloj para pending, borde rojo + texto de error para failed) —
-  falta pasada de revisión visual una vez el bug de SQLite esté resuelto y
-  se pueda ver la app corriendo.
+- [x] Estados que el Figma no cubre explícitamente — verificado
+  visualmente en web (Playwright), claro y oscuro: pending/sent/confirmed
+  (ícono de reloj/check/doble check junto al timestamp, ver ticks de
+  entrega arriba) y failed (borde rojo + ícono de alerta + texto de
+  retry/rechazo), todos legibles sobre ambos fondos de burbuja. Gift
+  modal: solo se verificó visualmente que abre y renderiza correctamente
+  (montos, selector de método de pago); el sub-estado "pending
+  confirmation" del pago (`useGiftPurchase`, delay de 1500ms) **no** se
+  verificó visualmente, solo por código. `OfflineBanner` tampoco se pudo
+  disparar visualmente — `context.setOffline()` de Playwright no lo
+  activó en la sesión de prueba (probablemente el polyfill web de
+  `@react-native-community/netinfo` no reacciona a esa señal igual que en
+  nativo); su código (`useFadeInEntrance` + `useReducedMotion`) se
+  revisó y es correcto, pero queda sin confirmar en pantalla.
+  No se probó en iOS Simulator (no se lanzó en esta sesión), solo web.
 - [x] "Reduced motion": `useReducedMotion` (`src/hooks/useReducedMotion.ts`,
   envuelve `AccessibilityInfo.isReduceMotionEnabled`/`reduceMotionChanged`)
   + `OfflineBanner` con fade-in de entrada (`Animated`, 200ms,
