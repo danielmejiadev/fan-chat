@@ -1,3 +1,5 @@
+import NetInfo from "@react-native-community/netinfo";
+
 import { ContentRejectedError } from "@/mockApi/chat/mockChatBackend";
 import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
@@ -105,11 +107,21 @@ export async function enqueueMessage(
  * its text intact — a later retry reuses the same id, so a backend that
  * dedupes by clientId resolves it to a single message no matter how many
  * times this runs.
+ *
+ * No-ops while offline, leaving queued messages Pending (clock icon) instead
+ * of reaching the backend — mockChatConnection's own reconcile() picks them
+ * up once NetInfo reports reconnection.
  */
 export async function flushPendingMessages(
   conversationId: string,
   senderId: string,
 ): Promise<void> {
+  const networkState = await NetInfo.fetch();
+
+  if (networkState.isConnected === false) {
+    return;
+  }
+
   const chatStore = resolveStore();
   const backend = getConversationBackend(conversationId);
   const nonConfirmedMessages = await chatStore.getNonConfirmedMessages(conversationId);
