@@ -1,34 +1,33 @@
 import "@/global.css";
 
-import { useCallback } from "react";
+import { useEffect } from "react";
 import { View } from "react-native";
 import { Stack } from "expo-router";
 import { SQLiteProvider } from "expo-sqlite";
+import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
 import * as SplashScreen from "expo-splash-screen";
-import { useFonts } from "@expo-google-fonts/geist/useFonts";
-import { Geist_400Regular } from "@expo-google-fonts/geist/400Regular";
-import { Geist_500Medium } from "@expo-google-fonts/geist/500Medium";
-import { Geist_600SemiBold } from "@expo-google-fonts/geist/600SemiBold";
 
-import { initChatSchema } from "@/features/chat/storage/chatDatabase";
+import { getChatDatabase } from "@/lib/database";
 import { initPurchasesSchema } from "@/features/purchases/storage/purchasesDatabase";
+import { useLoadFonts } from "@/hooks/useLoadFonts";
+import migrations from "../../drizzle/chat/migrations";
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
-    Geist_400Regular,
-    Geist_500Medium,
-    Geist_600SemiBold,
-  });
+  const { fontsLoaded, onRootViewLayout } = useLoadFonts();
+  const { success: chatMigrationsSucceeded, error: chatMigrationsError } = useMigrations(
+    getChatDatabase(),
+    migrations,
+  );
 
-  const onRootViewLayout = useCallback(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
+  useEffect(() => {
+    if (chatMigrationsError) {
+      console.error("Chat schema migration failed", chatMigrationsError);
     }
-  }, [fontsLoaded]);
+  }, [chatMigrationsError]);
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || !chatMigrationsSucceeded) {
     return null;
   }
 
@@ -37,7 +36,6 @@ export default function RootLayout() {
       <SQLiteProvider
         databaseName="myapp.db"
         onInit={async () => {
-          initChatSchema();
           initPurchasesSchema();
         }}
       >
