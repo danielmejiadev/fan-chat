@@ -1,3 +1,5 @@
+export type PaymentMethod = "card" | "apple" | "paypal" | "crypto";
+
 export enum StorePurchaseStatus {
   Pending = "pending",
   Succeeded = "succeeded",
