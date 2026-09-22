@@ -1,5 +1,5 @@
 import { createSeededRandom } from "@/features/chat/utils/seededRandom";
-import type { ServerMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 export const PERF_TEST_CONVERSATION_ID = "perf-test";
 export const PERF_TEST_MESSAGE_COUNT = 50_000;
@@ -33,9 +33,9 @@ const SAMPLE_SENTENCES = [
  * the 50k-message dataset is identical across runs and devices — required
  * for the scroll+typing profiling script in Phase 5 to be comparable.
  */
-export function generatePerfTestMessages(): ServerMessage[] {
+export function generatePerfTestMessages(): Message[] {
   const random = createSeededRandom(PERF_TEST_SEED);
-  const messages: ServerMessage[] = [];
+  const messages: Message[] = [];
 
   const referenceTimestamp = Date.UTC(2026, 0, 1);
   let timestamp = referenceTimestamp - PERF_TEST_MESSAGE_COUNT * 60_000;
@@ -43,14 +43,18 @@ export function generatePerfTestMessages(): ServerMessage[] {
   for (let index = 0; index < PERF_TEST_MESSAGE_COUNT; index += 1) {
     const isFromCreator = index % 2 === 0;
     const sentenceIndex = Math.floor(random() * SAMPLE_SENTENCES.length);
+    const serverId = `perf_${index}`;
 
     messages.push({
-      serverId: `perf_${index}`,
+      id: serverId,
+      serverId,
       clientId: null,
       conversationId: PERF_TEST_CONVERSATION_ID,
       senderId: isFromCreator ? PERF_TEST_CREATOR_SENDER_ID : PERF_TEST_FAN_SENDER_ID,
       text: SAMPLE_SENTENCES[sentenceIndex],
       createdAt: timestamp,
+      status: MessageStatus.Confirmed,
+      failureReason: null,
     });
 
     timestamp += 60_000 + Math.floor(random() * 5_000);

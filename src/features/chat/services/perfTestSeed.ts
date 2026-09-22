@@ -25,7 +25,7 @@ export function resetPerfTestSeedStore(): void {
  */
 export async function ensurePerfTestMessagesSeeded(): Promise<void> {
   const store = storeOverrideForTests ?? createSqliteChatStore();
-  const existingCount = await store.countMessages(PERF_TEST_CONVERSATION_ID);
+  const existingCount = await store.countConfirmedMessages(PERF_TEST_CONVERSATION_ID);
 
   if (existingCount >= PERF_TEST_MESSAGE_COUNT) {
     return;

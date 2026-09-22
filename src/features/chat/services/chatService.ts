@@ -1,13 +1,8 @@
 import { ContentRejectedError } from "@/mockApi/chat/mockChatBackend";
 import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
-import type { ChatStore } from "@/features/chat/storage/chatStore";
-import {
-  MessageFailureReason,
-  MessageStatus,
-  type ClientMessage,
-  type ServerMessage,
-} from "@/features/chat/types";
+import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
+import { MessageFailureReason, MessageStatus, type Message } from "@/features/chat/types";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: ChatStore | null = null;
@@ -70,36 +65,46 @@ export function resetChatServiceStore(): void {
 }
 
 /**
- * Writes the message to the local outbox before any network attempt, so it
- * survives a force-quit while still "pending".
+ * Writes the message to the store before any network attempt, so it
+ * survives a force-quit while still "pending". Its id is the clientId —
+ * fixed for the rest of this message's life, even once it's Confirmed.
  */
-export async function enqueueMessage(conversationId: string, text: string): Promise<ClientMessage> {
-  const message: ClientMessage = {
-    clientId: generateUuid(),
+export async function enqueueMessage(
+  conversationId: string,
+  senderId: string,
+  text: string,
+): Promise<Message> {
+  const clientId = generateUuid();
+  const message: Message = {
+    id: clientId,
+    serverId: null,
+    clientId,
     conversationId,
+    senderId,
     text,
     createdAt: Date.now(),
     status: MessageStatus.Pending,
+    failureReason: null,
   };
 
-  await resolveStore().insertPendingMessage(message);
+  await resolveStore().insertMessage(message);
 
   return message;
 }
 
 /**
- * Attempts to deliver every pending message for a conversation. Submitting
- * only gets the message *accepted* (status → Sent, single check) — the
- * backend itself surfaces the confirmed ServerMessage into its canonical
+ * Attempts to deliver every Pending/Sent/Failed message for a conversation.
+ * Submitting only gets the message *accepted* (status → Sent, single check)
+ * — the backend itself surfaces the confirmed message into its canonical
  * thread asynchronously, after its own simulated delay (see
  * mockChatBackend.ts). This function does not wait for that; the message is
- * promoted to "Confirmed" (double check) later, by receiveMessages(), once
+ * promoted to Confirmed (double check) later, by receiveMessages(), once
  * syncThread()/polling observes it in the backend's thread.
  *
- * A lost response (ResponseLostError) leaves the message "failed" locally
- * with its text intact — a later retry reuses the same clientId, so a
- * backend that dedupes by clientId resolves it to a single message no
- * matter how many times this runs.
+ * A lost response (ResponseLostError) leaves the message Failed locally with
+ * its text intact — a later retry reuses the same id, so a backend that
+ * dedupes by clientId resolves it to a single message no matter how many
+ * times this runs.
  */
 export async function flushPendingMessages(
   conversationId: string,
@@ -107,53 +112,52 @@ export async function flushPendingMessages(
 ): Promise<void> {
   const chatStore = resolveStore();
   const backend = getConversationBackend(conversationId);
-  const pendingMessages = await chatStore.getPendingMessages(conversationId);
+  const nonConfirmedMessages = await chatStore.getNonConfirmedMessages(conversationId);
 
   const shouldDropNextResponse = conversationIdsWithDroppedResponse.delete(conversationId);
   const shouldRejectNextMessage = conversationIdsWithRejectedContent.delete(conversationId);
 
-  for (const [index, pendingMessage] of pendingMessages.entries()) {
-    await chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Sent);
+  for (const [index, message] of nonConfirmedMessages.entries()) {
+    await chatStore.updateMessage(message.id, { status: MessageStatus.Sent, failureReason: null });
 
     try {
-      const serverMessage = await backend.submitMessage(pendingMessage, senderId, {
+      await backend.submitMessage(message, senderId, {
         dropResponse: shouldDropNextResponse && index === 0,
         rejectContent: shouldRejectNextMessage && index === 0,
       });
-
-      await chatStore.recordAcceptedClientId(pendingMessage.clientId, serverMessage.serverId);
     } catch (error) {
       const failureReason =
         error instanceof ContentRejectedError
           ? MessageFailureReason.Rejected
           : MessageFailureReason.Recoverable;
 
-      await chatStore.updatePendingMessageStatus(
-        pendingMessage.clientId,
-        MessageStatus.Failed,
-        failureReason,
-      );
+      await chatStore.updateMessage(message.id, { status: MessageStatus.Failed, failureReason });
     }
   }
 }
 
 /**
- * Reconciles incoming messages from the other participant (or from a
- * confirmed retry). insertMessage is keyed by serverId, so replaying the
- * same batch never duplicates the thread. A server message carrying a
- * clientId is this device's own submission finally surfacing as confirmed —
- * that's what promotes it from "Sent" (single check, still in the pending
- * outbox) to "Confirmed" (double check, now only in the ServerMessage
- * thread), so its pending row is removed here.
+ * Reconciles messages from the backend's canonical thread — the other
+ * participant's messages, or this device's own submissions finally
+ * surfacing as confirmed. A message with a clientId is this device's own:
+ * it already has a row (inserted by enqueueMessage), so it's promoted in
+ * place with a single UPDATE. A message without one came from the other
+ * participant and is being seen for the first time, so it's INSERTed —
+ * deduped by id (its serverId), so replaying the same batch never
+ * duplicates the thread.
  */
-export async function receiveMessages(serverMessages: ServerMessage[]): Promise<void> {
+export async function receiveMessages(confirmedMessages: Message[]): Promise<void> {
   const chatStore = resolveStore();
 
-  for (const serverMessage of serverMessages) {
-    await chatStore.insertMessage(serverMessage);
-
-    if (serverMessage.clientId !== null) {
-      await chatStore.deletePendingMessage(serverMessage.clientId);
+  for (const confirmedMessage of confirmedMessages) {
+    if (confirmedMessage.clientId !== null) {
+      await chatStore.updateMessage(confirmedMessage.clientId, {
+        status: MessageStatus.Confirmed,
+        serverId: confirmedMessage.serverId,
+        failureReason: null,
+      });
+    } else {
+      await chatStore.insertMessage(confirmedMessage);
     }
   }
 }
@@ -187,24 +191,27 @@ export async function submitPendingMessages(
   await syncThread(conversationId);
 }
 
-export async function getConfirmedThread(conversationId: string): Promise<ServerMessage[]> {
-  return resolveStore().getThreadMessages(conversationId);
+/**
+ * Every Confirmed message for a conversation, oldest first. Test-only
+ * convenience — the app itself only ever reads a bounded page (see
+ * getConfirmedMessagesPage).
+ */
+export async function getConfirmedThread(conversationId: string): Promise<Message[]> {
+  const newestFirstPage = await resolveStore().getConfirmedMessagesPage(conversationId, {
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+
+  return newestFirstPage.slice().reverse();
 }
 
-/**
- * The newest `limit` confirmed messages. Re-reads the whole page on every
- * call instead of accumulating cursor pages — simpler to keep correct while
- * the thread also gets new messages from reconciliation, at the cost of
- * re-reading on every call. Fine at this scale; worth revisiting in Phase 5
- * if profiling shows it's the bottleneck on the 50k-message conversation.
- */
 export async function getConfirmedMessagesPage(
   conversationId: string,
   limit: number,
-): Promise<ServerMessage[]> {
-  return resolveStore().getThreadMessagesPage(conversationId, { limit });
+  before?: MessagePageCursor,
+): Promise<Message[]> {
+  return resolveStore().getConfirmedMessagesPage(conversationId, { limit, before });
 }
 
-export async function getPendingMessages(conversationId: string): Promise<ClientMessage[]> {
-  return resolveStore().getPendingMessages(conversationId);
+export async function getNonConfirmedMessages(conversationId: string): Promise<Message[]> {
+  return resolveStore().getNonConfirmedMessages(conversationId);
 }

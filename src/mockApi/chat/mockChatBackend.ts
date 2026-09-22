@@ -1,11 +1,11 @@
 import type { SeedMessage } from "@/features/chat/constants/mockMessages";
-import type { ClientMessage, ServerMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 /**
  * Thrown when the backend accepted and stored the message, but the response
  * never reached the client (dropped connection, backgrounded app, etc). This
  * is the "lost response after retry" scenario: the client cannot tell success
- * from failure and must retry with the same clientId.
+ * from failure and must retry with the same id.
  */
 export class ResponseLostError extends Error {
   constructor() {
@@ -28,25 +28,26 @@ export class ContentRejectedError extends Error {
 }
 
 export type MockChatBackend = {
+  /** `message` is the local Pending/Failed row being (re)submitted. Returns the confirmed Message. */
   submitMessage: (
-    message: ClientMessage,
+    message: Message,
     senderId: string,
     options?: { dropResponse?: boolean; rejectContent?: boolean },
-  ) => Promise<ServerMessage>;
+  ) => Promise<Message>;
   /**
    * The backend's canonical thread. A client only sees its own submissions
    * through submitMessage's return value — if that response was lost, the
    * duplicate a non-deduping backend created is invisible until the client
    * reconciles against this list, e.g. on reconnect.
    */
-  listMessages: (conversationId: string) => ServerMessage[];
+  listMessages: (conversationId: string) => Message[];
   /**
    * Simulates the other participant sending a message — there is no
    * clientId because it did not originate on this device. Only visible to a
    * client after its next syncThread, same as any other backend-side change,
    * or immediately via subscribe() if the client is connected.
    */
-  receiveIncomingMessage: (conversationId: string, senderId: string, text: string) => ServerMessage;
+  receiveIncomingMessage: (conversationId: string, senderId: string, text: string) => Message;
   /**
    * Registers a listener that fires whenever a message joins the canonical
    * thread — this client's own delayed confirmation, or the other
@@ -94,16 +95,19 @@ export function createMockChatBackend(
   confirmationDelayMs: number = DEFAULT_CONFIRMATION_DELAY_MS,
   submitDelayMs: number = DEFAULT_SUBMIT_DELAY_MS,
 ): MockChatBackend {
-  // seed.serverId must stay identical across reloads for INSERT OR IGNORE to dedupe it.
-  const messages: ServerMessage[] = seedMessages.map((seed) => ({
+  // seed.serverId must stay identical across reloads for onConflictDoNothing to dedupe it.
+  const messages: Message[] = seedMessages.map((seed) => ({
+    id: seed.serverId,
     serverId: seed.serverId,
     clientId: null,
     conversationId: seed.conversationId,
     senderId: seed.senderId,
     text: seed.text,
     createdAt: seed.createdAt,
+    status: MessageStatus.Confirmed,
+    failureReason: null,
   }));
-  const acceptedByClientId = new Map<string, ServerMessage>();
+  const confirmedByClientId = new Map<string, Message>();
   const listeners = new Set<() => void>();
 
   const notifyListeners = (): void => {
@@ -117,33 +121,41 @@ export function createMockChatBackend(
       // Simulates the network round-trip for the submission itself — the
       // client only observes the message flip from Pending to Sent once this
       // resolves, separate from and shorter than the confirmation delay.
-      return new Promise<ServerMessage>((resolve, reject) => {
+      return new Promise<Message>((resolve, reject) => {
         setTimeout(() => {
           if (options?.rejectContent === true) {
             reject(new ContentRejectedError());
             return;
           }
 
-          const existing = dedupeByClientId ? acceptedByClientId.get(message.clientId) : undefined;
+          const clientId = message.clientId;
+          const existing =
+            dedupeByClientId && clientId !== null ? confirmedByClientId.get(clientId) : undefined;
 
-          const serverMessage: ServerMessage = existing ?? {
-            serverId: `srv_${nextServerId++}`,
-            clientId: message.clientId,
+          const serverId = existing?.serverId ?? `srv_${nextServerId++}`;
+          const confirmedMessage: Message = existing ?? {
+            id: serverId,
+            serverId,
+            clientId,
             conversationId: message.conversationId,
             senderId,
             text: message.text,
             createdAt: message.createdAt,
+            status: MessageStatus.Confirmed,
+            failureReason: null,
           };
 
           if (existing === undefined) {
-            acceptedByClientId.set(message.clientId, serverMessage);
+            if (clientId !== null) {
+              confirmedByClientId.set(clientId, confirmedMessage);
+            }
 
             // Accepting the submission happens above, but joining the
             // canonical thread — what listMessages() reports — happens only
             // after this further delay. The client only learns about it by
             // polling/syncing, same as any other backend-side change.
             setTimeout(() => {
-              messages.push(serverMessage);
+              messages.push(confirmedMessage);
               notifyListeners();
             }, confirmationDelayMs);
           }
@@ -153,7 +165,7 @@ export function createMockChatBackend(
             return;
           }
 
-          resolve(serverMessage);
+          resolve(confirmedMessage);
         }, submitDelayMs);
       });
     },
@@ -163,19 +175,23 @@ export function createMockChatBackend(
     },
 
     receiveIncomingMessage(conversationId, senderId, text) {
-      const serverMessage: ServerMessage = {
-        serverId: `srv_${nextServerId++}`,
+      const serverId = `srv_${nextServerId++}`;
+      const confirmedMessage: Message = {
+        id: serverId,
+        serverId,
         clientId: null,
         conversationId,
         senderId,
         text,
         createdAt: Date.now(),
+        status: MessageStatus.Confirmed,
+        failureReason: null,
       };
 
-      messages.push(serverMessage);
+      messages.push(confirmedMessage);
       notifyListeners();
 
-      return serverMessage;
+      return confirmedMessage;
     },
 
     subscribe(listener) {

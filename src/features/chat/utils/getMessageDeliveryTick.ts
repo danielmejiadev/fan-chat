@@ -1,6 +1,6 @@
 import type { Ionicons } from "@expo/vector-icons";
 
-import { MessageStatus, type ThreadMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 export type MessageDeliveryTick = {
   iconName: keyof typeof Ionicons.glyphMap;
@@ -11,13 +11,12 @@ export type MessageDeliveryTick = {
 /**
  * WhatsApp-style delivery state for the current user's own messages:
  * Pending (queued locally) -> Sent (backend accepted it) -> Confirmed
- * (reconciled into the canonical thread, i.e. origin "server"). A message
- * only reaches "server" origin once chatService's receiveMessages()
- * promotes it, so origin alone already distinguishes Sent from Confirmed.
- * Returns null for received messages, which never show a tick.
+ * (reconciled into the canonical thread). Purely status-driven — call only
+ * for own messages, the caller decides that. Returns null for a status that
+ * doesn't map to a tick (there is none today, but keeps the function total).
  */
-export function getMessageDeliveryTick(threadMessage: ThreadMessage): MessageDeliveryTick | null {
-  if (threadMessage.origin === "server") {
+export function getMessageDeliveryTick(message: Message): MessageDeliveryTick | null {
+  if (message.status === MessageStatus.Confirmed) {
     return {
       iconName: "checkmark-done",
       accessibilityLabel: "Confirmed",
@@ -25,7 +24,7 @@ export function getMessageDeliveryTick(threadMessage: ThreadMessage): MessageDel
     };
   }
 
-  if (threadMessage.message.status === MessageStatus.Pending) {
+  if (message.status === MessageStatus.Pending) {
     return {
       iconName: "time-outline",
       accessibilityLabel: "Pending",
@@ -33,7 +32,7 @@ export function getMessageDeliveryTick(threadMessage: ThreadMessage): MessageDel
     };
   }
 
-  if (threadMessage.message.status === MessageStatus.Sent) {
+  if (message.status === MessageStatus.Sent) {
     return {
       iconName: "checkmark",
       accessibilityLabel: "Sent",
@@ -41,7 +40,7 @@ export function getMessageDeliveryTick(threadMessage: ThreadMessage): MessageDel
     };
   }
 
-  if (threadMessage.message.status === MessageStatus.Failed) {
+  if (message.status === MessageStatus.Failed) {
     return {
       iconName: "alert-circle",
       accessibilityLabel: "Failed to send",
