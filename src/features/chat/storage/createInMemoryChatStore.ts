@@ -1,5 +1,5 @@
 import type { ChatStore } from "@/features/chat/storage/chatStore";
-import type { ClientMessage, ServerMessage } from "@/features/chat/types";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
 /**
  * In-memory ChatStore for tests — expo-sqlite is a native module that does
@@ -9,65 +9,52 @@ import type { ClientMessage, ServerMessage } from "@/features/chat/types";
  * Promises to satisfy the async ChatStore contract.
  */
 export function createInMemoryChatStore(): ChatStore {
-  const pendingMessages = new Map<string, ClientMessage>();
-  const acceptedClientIds = new Map<string, string>();
-  const messages = new Map<string, ServerMessage>();
+  const messages = new Map<string, Message>();
 
   return {
-    async insertPendingMessage(message) {
-      pendingMessages.set(message.clientId, message);
-    },
-    async updatePendingMessageStatus(clientId, status, failureReason) {
-      const existing = pendingMessages.get(clientId);
-      if (existing !== undefined) {
-        pendingMessages.set(clientId, { ...existing, status, failureReason });
-      }
-    },
-    async deletePendingMessage(clientId) {
-      pendingMessages.delete(clientId);
-    },
-    async getPendingMessages(conversationId) {
-      return Array.from(pendingMessages.values())
-        .filter((message) => message.conversationId === conversationId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-    },
-    async isClientIdAccepted(clientId) {
-      return acceptedClientIds.has(clientId);
-    },
-    async recordAcceptedClientId(clientId, serverId) {
-      acceptedClientIds.set(clientId, serverId);
-    },
     async insertMessage(message) {
-      if (!messages.has(message.serverId)) {
-        messages.set(message.serverId, message);
+      if (!messages.has(message.id)) {
+        messages.set(message.id, message);
       }
-    },
-    async getThreadMessages(conversationId) {
-      return Array.from(messages.values())
-        .filter((message) => message.conversationId === conversationId)
-        .sort((a, b) => a.createdAt - b.createdAt);
     },
     async insertMessages(newMessages) {
       for (const message of newMessages) {
-        if (!messages.has(message.serverId)) {
-          messages.set(message.serverId, message);
+        if (!messages.has(message.id)) {
+          messages.set(message.id, message);
         }
       }
     },
-    async countMessages(conversationId) {
-      let count = 0;
+    async updateMessage(id, update) {
+      const existing = messages.get(id);
+      if (existing !== undefined) {
+        messages.set(id, { ...existing, ...update });
+      }
+    },
+    async getNonConfirmedMessages(conversationId) {
+      return Array.from(messages.values())
+        .filter(
+          (message) =>
+            message.conversationId === conversationId && message.status !== MessageStatus.Confirmed,
+        )
+        .sort((a, b) => a.createdAt - b.createdAt);
+    },
+    async countConfirmedMessages(conversationId) {
+      let total = 0;
       for (const message of messages.values()) {
-        if (message.conversationId === conversationId) {
-          count += 1;
+        if (message.conversationId === conversationId && message.status === MessageStatus.Confirmed) {
+          total += 1;
         }
       }
-      return count;
+      return total;
     },
-    async getThreadMessagesPage(conversationId, options) {
+    async getConfirmedMessagesPage(conversationId, options) {
       const { before } = options;
 
       return Array.from(messages.values())
-        .filter((message) => message.conversationId === conversationId)
+        .filter(
+          (message) =>
+            message.conversationId === conversationId && message.status === MessageStatus.Confirmed,
+        )
         .filter((message) => {
           if (before === undefined) {
             return true;
@@ -75,13 +62,13 @@ export function createInMemoryChatStore(): ChatStore {
           if (message.createdAt !== before.createdAt) {
             return message.createdAt < before.createdAt;
           }
-          return message.serverId < before.serverId;
+          return (message.serverId ?? "") < before.serverId;
         })
         .sort((a, b) => {
           if (a.createdAt !== b.createdAt) {
             return b.createdAt - a.createdAt;
           }
-          return b.serverId.localeCompare(a.serverId);
+          return (b.serverId ?? "").localeCompare(a.serverId ?? "");
         })
         .slice(0, options.limit);
     },

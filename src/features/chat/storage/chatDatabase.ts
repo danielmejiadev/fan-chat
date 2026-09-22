@@ -1,96 +1,40 @@
-import { and, count, desc, eq, lt, or } from "drizzle-orm";
+import { and, count, desc, eq, lt, ne, or } from "drizzle-orm";
 
 import { getAppDatabase } from "@/lib/database";
-import { acceptedClientIds, messages, pendingMessages } from "@/features/chat/storage/schema";
-import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
-import type {
-  ClientMessage,
-  MessageFailureReason,
-  MessageStatus,
-  ServerMessage,
-} from "@/features/chat/types";
+import { messages } from "@/features/chat/storage/schema";
+import type { ChatStore } from "@/features/chat/storage/chatStore";
+import { MessageStatus, type Message } from "@/features/chat/types";
 
-/** Wipes every chat table — used by the demo's reset action, never in normal app flow. */
+/** Wipes the chat table — used by the demo's reset action, never in normal app flow. */
 export async function clearChatData(): Promise<void> {
   const database = getAppDatabase();
 
-  await database.delete(pendingMessages);
-  await database.delete(acceptedClientIds);
   await database.delete(messages);
+}
+
+function toMessage(row: typeof messages.$inferSelect): Message {
+  return {
+    id: row.id,
+    serverId: row.serverId,
+    clientId: row.clientId,
+    conversationId: row.conversationId,
+    senderId: row.senderId,
+    text: row.text,
+    createdAt: row.createdAt,
+    status: row.status as MessageStatus,
+    failureReason: row.failureReason as Message["failureReason"],
+  };
 }
 
 export function createSqliteChatStore(): ChatStore {
   const database = getAppDatabase();
 
   return {
-    async insertPendingMessage(message: ClientMessage): Promise<void> {
-      await database.insert(pendingMessages).values({
-        clientId: message.clientId,
-        conversationId: message.conversationId,
-        text: message.text,
-        createdAt: message.createdAt,
-        status: message.status,
-      });
-    },
-
-    async updatePendingMessageStatus(
-      clientId: string,
-      status: MessageStatus,
-      failureReason?: MessageFailureReason,
-    ): Promise<void> {
-      await database
-        .update(pendingMessages)
-        .set({ status, failureReason: failureReason ?? null })
-        .where(eq(pendingMessages.clientId, clientId));
-    },
-
-    async deletePendingMessage(clientId: string): Promise<void> {
-      await database.delete(pendingMessages).where(eq(pendingMessages.clientId, clientId));
-    },
-
-    async getPendingMessages(conversationId: string): Promise<ClientMessage[]> {
-      const rows = await database
-        .select()
-        .from(pendingMessages)
-        .where(eq(pendingMessages.conversationId, conversationId))
-        .orderBy(pendingMessages.createdAt);
-
-      return rows.map(({ failureReason, ...row }) => ({
-        ...row,
-        status: row.status as MessageStatus,
-        ...(failureReason !== null ? { failureReason: failureReason as MessageFailureReason } : {}),
-      }));
-    },
-
-    async isClientIdAccepted(clientId: string): Promise<boolean> {
-      const rows = await database
-        .select({ clientId: acceptedClientIds.clientId })
-        .from(acceptedClientIds)
-        .where(eq(acceptedClientIds.clientId, clientId))
-        .limit(1);
-
-      return rows.length > 0;
-    },
-
-    async recordAcceptedClientId(clientId: string, serverId: string): Promise<void> {
-      await database.insert(acceptedClientIds).values({ clientId, serverId }).onConflictDoNothing();
-    },
-
-    async insertMessage(message: ServerMessage): Promise<void> {
+    async insertMessage(message: Message): Promise<void> {
       await database.insert(messages).values(message).onConflictDoNothing();
     },
 
-    async getThreadMessages(conversationId: string): Promise<ServerMessage[]> {
-      const rows = await database
-        .select()
-        .from(messages)
-        .where(eq(messages.conversationId, conversationId))
-        .orderBy(messages.createdAt);
-
-      return rows;
-    },
-
-    async insertMessages(newMessages: ServerMessage[]): Promise<void> {
+    async insertMessages(newMessages: Message[]): Promise<void> {
       await database.transaction(async (transaction) => {
         for (const message of newMessages) {
           await transaction.insert(messages).values(message).onConflictDoNothing();
@@ -98,26 +42,42 @@ export function createSqliteChatStore(): ChatStore {
       });
     },
 
-    async countMessages(conversationId: string): Promise<number> {
+    async updateMessage(id, update): Promise<void> {
+      await database.update(messages).set(update).where(eq(messages.id, id));
+    },
+
+    async getNonConfirmedMessages(conversationId: string): Promise<Message[]> {
+      const rows = await database
+        .select()
+        .from(messages)
+        .where(
+          and(eq(messages.conversationId, conversationId), ne(messages.status, MessageStatus.Confirmed)),
+        )
+        .orderBy(messages.createdAt);
+
+      return rows.map(toMessage);
+    },
+
+    async countConfirmedMessages(conversationId: string): Promise<number> {
       const rows = await database
         .select({ count: count() })
         .from(messages)
-        .where(eq(messages.conversationId, conversationId));
+        .where(
+          and(eq(messages.conversationId, conversationId), eq(messages.status, MessageStatus.Confirmed)),
+        );
 
       return rows[0]?.count ?? 0;
     },
 
-    async getThreadMessagesPage(
-      conversationId: string,
-      options: { limit: number; before?: MessagePageCursor },
-    ): Promise<ServerMessage[]> {
+    async getConfirmedMessagesPage(conversationId, options): Promise<Message[]> {
       const { before } = options;
 
       const whereClause =
         before === undefined
-          ? eq(messages.conversationId, conversationId)
+          ? and(eq(messages.conversationId, conversationId), eq(messages.status, MessageStatus.Confirmed))
           : and(
               eq(messages.conversationId, conversationId),
+              eq(messages.status, MessageStatus.Confirmed),
               or(
                 lt(messages.createdAt, before.createdAt),
                 and(
@@ -134,7 +94,7 @@ export function createSqliteChatStore(): ChatStore {
         .orderBy(desc(messages.createdAt), desc(messages.serverId))
         .limit(options.limit);
 
-      return rows;
+      return rows.map(toMessage);
     },
   };
 }

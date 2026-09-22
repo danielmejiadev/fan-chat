@@ -1,13 +1,14 @@
 export enum MessageStatus {
   Pending = "pending",
   Sent = "sent",
+  Confirmed = "confirmed",
   Failed = "failed",
 }
 
 /**
  * Only meaningful when status is Failed. "recoverable" covers transient
  * delivery problems (lost response, timeout) where retrying with the same
- * clientId is the right action. "rejected" covers the backend refusing the
+ * id is the right action. "rejected" covers the backend refusing the
  * content outright — retrying the same text would just fail again, so the
  * UI must not offer a retry for it.
  */
@@ -17,32 +18,22 @@ export enum MessageFailureReason {
 }
 
 /**
- * A message as created on this device, before the mock backend confirms it.
- * The clientId is generated at creation time and must survive app restarts —
- * it is the idempotency key the mock backend uses to reconcile retries.
+ * One row per message in a conversation's thread. `id` is assigned once, at
+ * creation, and never changes: the clientId this device generated if the
+ * message originated here, or the backend's serverId if it came from the
+ * other participant. Every later change (Sent, Confirmed, Failed) is a
+ * single UPDATE of this same row by `id` — a message never moves between
+ * tables or gets deleted and reinserted, so there is no window where it
+ * exists nowhere.
  */
-export type ClientMessage = {
-  clientId: string;
-  conversationId: string;
-  text: string;
-  createdAt: number;
-  status: MessageStatus;
-  failureReason?: MessageFailureReason;
-};
-
-/**
- * A message as confirmed by the mock backend. clientId is present when the
- * server message originated from a ClientMessage sent by this device, and
- * null for messages that came from the other participant.
- */
-export type ServerMessage = {
-  serverId: string;
+export type Message = {
+  id: string;
+  serverId: string | null;
   clientId: string | null;
   conversationId: string;
   senderId: string;
   text: string;
   createdAt: number;
+  status: MessageStatus;
+  failureReason: MessageFailureReason | null;
 };
-
-export type ThreadMessage =
-  { origin: "client"; message: ClientMessage } | { origin: "server"; message: ServerMessage };
