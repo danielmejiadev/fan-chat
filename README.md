@@ -81,13 +81,6 @@ hooks:
 - `useChatConnection` — opens/polls/tears down the mock connection and
   triggers a sync on app-foreground.
 
-There's no Zustand store anywhere in this app. AGENTS.md reserves Zustand
-for state that several *unrelated* components need to read or write — here,
-a chat thread or a gift purchase only ever belongs to the one screen
-showing it, so plain `useState`/`useEffect` inside a hook is enough. If a
-future screen needed to show, say, an unread-count badge fed by the same
-data, that's the point where it would move to a shared store.
-
 ### Services — `src/features/*/services/`, `src/services/`
 
 `chatService.ts` and `purchaseService.ts` hold every rule that actually
