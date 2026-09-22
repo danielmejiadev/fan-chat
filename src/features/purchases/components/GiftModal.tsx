@@ -23,16 +23,9 @@ interface GiftModalProps {
   visible: boolean;
   onClose: () => void;
   onGiftSent: (text: string) => void;
-  onEntitlementChange: () => void;
 }
 
-export function GiftModal({
-  conversation,
-  visible,
-  onClose,
-  onGiftSent,
-  onEntitlementChange,
-}: GiftModalProps) {
+export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftModalProps) {
   const isDesktop = useIsDesktopLayout();
   const {
     control,
@@ -47,33 +40,25 @@ export function GiftModal({
       debugOutcome: StorePurchaseStatus.Succeeded,
     },
   });
-  const { state, errorMessage, pay, restore, reset } = useGiftPurchase(
+  const { state, errorMessage, pay, reset } = useGiftPurchase(
     CURRENT_FAN_ID,
     `gift-${conversation.id}`,
   );
   const selectedAmountCents = useWatch({ control, name: "amountCents" });
 
-  // Fires once the backend's delayed confirmation resolves — pay() itself
-  // can't close the modal synchronously, since "confirmed" only arrives
-  // after that delay.
+  // Fires once this gift's own purchase resolves as succeeded — each gift is
+  // its own independent, consumable transaction, not an unlock of any
+  // persistent access.
   useEffect(() => {
     if (state === "confirmed") {
       onGiftSent(`You sent a ${formatUsdFromCents(selectedAmountCents)} gift!`);
-      onEntitlementChange();
       reset();
       onClose();
     }
-  }, [state, selectedAmountCents, onGiftSent, onEntitlementChange, reset, onClose]);
+  }, [state, selectedAmountCents, onGiftSent, reset, onClose]);
 
   const onSubmit = (values: GiftFormValues) => {
     void pay(values.amountCents, values.debugOutcome);
-  };
-
-  const handleRestore = async () => {
-    const didRestore = await restore();
-    if (didRestore) {
-      onEntitlementChange();
-    }
   };
 
   return (
@@ -119,11 +104,7 @@ export function GiftModal({
                   control={control}
                   name="debugOutcome"
                   render={({ field }) => (
-                    <DebugOutcomeSelector
-                      selectedOutcome={field.value}
-                      onSelect={field.onChange}
-                      onRestore={() => void handleRestore()}
-                    />
+                    <DebugOutcomeSelector selectedOutcome={field.value} onSelect={field.onChange} />
                   )}
                 />
               </View>

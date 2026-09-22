@@ -14,7 +14,6 @@ import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import type { Message } from "@/features/chat/types";
 import { useIsOffline } from "@/hooks/useIsOffline";
 import { GiftModal } from "@/features/purchases/components/GiftModal";
-import { useEntitlementStatus } from "@/features/purchases/hooks/useEntitlementStatus";
 
 interface ThreadPaneProps {
   conversationId: string;
@@ -25,9 +24,6 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
   const [isGiftOpen, setIsGiftOpen] = useState(false);
   const isOffline = useIsOffline();
   const messagesListRef = useRef<FlashListRef<Message>>(null);
-  const { entitlementStatus, refresh: refreshEntitlement } = useEntitlementStatus(
-    `gift-${conversationId}`,
-  );
 
   const { messages, sendMessage, retryMessage, loadOlderMessages } = useChatThread(
     conversationId,
@@ -52,7 +48,7 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
         className="flex-1 bg-surface"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ChatThreadHeader conversation={conversation} entitlementStatus={entitlementStatus} />
+        <ChatThreadHeader conversation={conversation} />
         {isOffline && <OfflineBanner />}
         <MessagesList
           ref={messagesListRef}
@@ -71,7 +67,6 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
           visible={isGiftOpen}
           onClose={() => setIsGiftOpen(false)}
           onGiftSent={sendMessage}
-          onEntitlementChange={refreshEntitlement}
         />
       </KeyboardAvoidingView>
       <ChatDebugMenu conversationId={conversationId} participantId={conversation.participantId} />

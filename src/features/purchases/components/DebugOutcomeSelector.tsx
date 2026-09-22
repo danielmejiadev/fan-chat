@@ -6,26 +6,25 @@ import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBac
 import { StorePurchaseStatus } from "@/features/purchases/types";
 
 const DEBUG_OUTCOMES: { label: string; value: PurchaseAttemptOutcome }[] = [
-  { label: "Success", value: StorePurchaseStatus.Succeeded },
-  { label: "Cancel", value: StorePurchaseStatus.Canceled },
-  { label: "Fail", value: StorePurchaseStatus.Failed },
+  { label: "Payment succeeds", value: StorePurchaseStatus.Succeeded },
+  { label: "User cancels sheet", value: StorePurchaseStatus.Canceled },
+  { label: "Card declined", value: StorePurchaseStatus.Failed },
 ];
 
 interface DebugOutcomeSelectorProps {
   selectedOutcome: PurchaseAttemptOutcome | undefined;
   onSelect: (outcome: PurchaseAttemptOutcome) => void;
-  onRestore: () => void;
 }
 
-export function DebugOutcomeSelector({
-  selectedOutcome,
-  onSelect,
-  onRestore,
-}: DebugOutcomeSelectorProps) {
+export function DebugOutcomeSelector({ selectedOutcome, onSelect }: DebugOutcomeSelectorProps) {
   return (
     <View className="gap-2 rounded-xl border border-dashed border-border-light p-3">
       <Text className="text-caption font-sans-medium text-foreground-secondary">
-        Demo: force store outcome
+        Simulate payment sheet result (next Pay)
+      </Text>
+      <Text className="text-caption text-foreground-secondary">
+        This picks what the App Store/Play payment sheet would return for the next tap on Pay — the
+        outcome is decided before Pay, not after.
       </Text>
       <View className="flex-row gap-2">
         {DEBUG_OUTCOMES.map((outcome) => (
@@ -43,9 +42,6 @@ export function DebugOutcomeSelector({
           </Pressable>
         ))}
       </View>
-      <Pressable onPress={onRestore} accessibilityRole="button">
-        <Text className="text-caption font-sans-medium text-primary">Restore purchases</Text>
-      </Pressable>
     </View>
   );
 }

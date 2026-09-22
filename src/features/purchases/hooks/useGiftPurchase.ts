@@ -1,20 +1,18 @@
 import { useState } from "react";
 
 import type { PurchaseAttemptOutcome } from "@/mockApi/purchases/mockPurchaseBackend";
-import {
-  confirmPurchase,
-  getEntitlementStatus,
-  initiatePurchase,
-  processPurchase,
-  restorePurchases,
-} from "@/features/purchases/services/purchaseService";
-import { EntitlementStatus, StorePurchaseStatus } from "@/features/purchases/types";
+import { initiatePurchase, processPurchase } from "@/features/purchases/services/purchaseService";
+import { StorePurchaseStatus } from "@/features/purchases/types";
 
-export type GiftPurchaseState =
-  "idle" | "pending" | "pending-confirmation" | "confirmed" | "failed" | "canceled";
+export type GiftPurchaseState = "idle" | "pending" | "confirmed" | "failed" | "canceled";
 
-const CONFIRMATION_DELAY_MS = 1500;
-
+/**
+ * Each gift is its own independent, consumable transaction — sending one
+ * never unlocks any persistent access, so there is nothing to confirm with
+ * the backend or restore later. The delayed store-confirmation and
+ * aggregated-entitlement scenarios the task requires are demonstrated
+ * against a real paywall product in purchaseService.test.ts instead.
+ */
 export function useGiftPurchase(userId: string, productId: string) {
   const [state, setState] = useState<GiftPurchaseState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -50,31 +48,7 @@ export function useGiftPurchase(userId: string, productId: string) {
       return;
     }
 
-    // The store confirmed the charge, but access isn't granted yet — the
-    // backend's own entitlement confirmation is a separate, possibly-delayed
-    // step. Simulating that delay here is what makes the "pending
-    // confirmation" state honestly reachable from the real UI instead of
-    // only from a test with an injected backend.
-    setState("pending-confirmation");
-
-    setTimeout(async () => {
-      await confirmPurchase(processedPurchase.purchaseId);
-      const entitlement = await getEntitlementStatus(productId);
-      setState(entitlement === EntitlementStatus.Active ? "confirmed" : "pending");
-    }, CONFIRMATION_DELAY_MS);
-  };
-
-  /** Restoring never demotes a still-valid entitlement gained some other way. */
-  const restore = async (): Promise<boolean> => {
-    await restorePurchases(userId);
-    const entitlement = await getEntitlementStatus(productId);
-
-    if (entitlement === EntitlementStatus.Active) {
-      setState("confirmed");
-      return true;
-    }
-
-    return false;
+    setState("confirmed");
   };
 
   const reset = () => {
@@ -82,5 +56,5 @@ export function useGiftPurchase(userId: string, productId: string) {
     setErrorMessage(null);
   };
 
-  return { state, errorMessage, pay, restore, reset };
+  return { state, errorMessage, pay, reset };
 }

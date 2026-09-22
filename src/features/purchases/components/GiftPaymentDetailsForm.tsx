@@ -26,7 +26,7 @@ export function GiftPaymentDetailsForm({
   errorMessage,
   onPay,
 }: GiftPaymentDetailsFormProps) {
-  const isProcessing = state === "pending" || state === "pending-confirmation";
+  const isProcessing = state === "pending";
 
   return (
     <View className="flex-1 gap-4">
@@ -55,11 +55,6 @@ export function GiftPaymentDetailsForm({
           {getPayButtonLabel(state, amountCents)}
         </Text>
       </Pressable>
-      {state === "pending-confirmation" && (
-        <Text className="text-caption text-foreground-secondary">
-          Payment received — waiting for the backend to confirm access.
-        </Text>
-      )}
       {errorMessage && <Text className="text-caption text-error">{errorMessage}</Text>}
       {state === "canceled" && (
         <Text className="text-caption text-foreground-secondary">Purchase canceled.</Text>
