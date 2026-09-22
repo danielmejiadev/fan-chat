@@ -5,6 +5,7 @@ import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
 import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
 import { MessageFailureReason, MessageStatus, type Message } from "@/features/chat/types";
+import { isDebugForcedOffline, waitForDebugNetworkHydration } from "@/store/debugNetworkStore";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: ChatStore | null = null;
@@ -111,11 +112,21 @@ export async function enqueueMessage(
  * No-ops while offline, leaving queued messages Pending (clock icon) instead
  * of reaching the backend — mockChatConnection's own reconcile() picks them
  * up once NetInfo reports reconnection.
+ *
+ * Also honors the debug-only forced-offline override (see
+ * debugNetworkStore.ts) — the iOS Simulator has no real network radio to
+ * toggle, so NetInfo alone can't be used to demo this scenario there.
  */
 export async function flushPendingMessages(
   conversationId: string,
   senderId: string,
 ): Promise<void> {
+  await waitForDebugNetworkHydration();
+
+  if (isDebugForcedOffline()) {
+    return;
+  }
+
   const networkState = await NetInfo.fetch();
 
   if (networkState.isConnected === false) {

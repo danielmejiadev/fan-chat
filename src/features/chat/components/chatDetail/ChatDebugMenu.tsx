@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable } from "react-native";
+import { clsx } from "clsx";
 
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
@@ -8,6 +9,7 @@ import {
   rejectNextMessage,
   simulateIncomingMessages,
 } from "@/features/chat/services/chatService";
+import { useDebugNetworkStore } from "@/store/debugNetworkStore";
 
 const SIMULATED_INCOMING_TEXTS = [
   "Hey, you still there?",
@@ -29,6 +31,12 @@ interface ChatDebugMenuProps {
  */
 export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const isForcedOffline = useDebugNetworkStore((state) => state.isForcedOffline);
+  const setForcedOffline = useDebugNetworkStore((state) => state.setForcedOffline);
+
+  const handleToggleOffline = () => {
+    setForcedOffline(!isForcedOffline);
+  };
 
   const handleDropNextResponse = () => {
     dropNextResponse(conversationId);
@@ -53,10 +61,19 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
       <Pressable
         onPress={() => setIsOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Open demo controls"
-        className="absolute right-4 top-1/2 h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-error shadow-lg"
+        accessibilityLabel={
+          isForcedOffline ? "Open demo controls (offline forced)" : "Open demo controls"
+        }
+        className={clsx(
+          "absolute right-4 top-1/2 h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full shadow-lg",
+          { "bg-error": !isForcedOffline, "bg-offline": isForcedOffline },
+        )}
       >
-        <Icon name="bug-outline" size={22} className="text-white" />
+        <Icon
+          name={isForcedOffline ? "cloud-offline-outline" : "bug-outline"}
+          size={22}
+          className="text-white"
+        />
       </Pressable>
       <Modal
         visible={isOpen}
@@ -78,6 +95,23 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
               Dev-only — simulates failure scenarios the mock backend can&apos;t trigger from a real
               UI action.
             </Text>
+            <Pressable
+              onPress={handleToggleOffline}
+              accessibilityRole="button"
+              className={clsx("rounded-lg border px-4 py-3", {
+                "border-border-light": !isForcedOffline,
+                "border-offline bg-offline/5": isForcedOffline,
+              })}
+            >
+              <Text className="text-body font-sans-medium text-foreground-primary">
+                {isForcedOffline ? "Go back online" : "Go offline"}
+              </Text>
+              <Text className="text-caption text-foreground-secondary">
+                Forces every send to stay queued (clock icon) instead of reaching the backend — the
+                Simulator has no real network radio to toggle, so this stands in for Airplane Mode.
+                Toggle off to reconnect and flush the queue.
+              </Text>
+            </Pressable>
             <Pressable
               onPress={handleDropNextResponse}
               accessibilityRole="button"
