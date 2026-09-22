@@ -23,6 +23,7 @@ interface IconButtonProps {
   onPress?: () => void;
   accessibilityLabel: string;
   variant?: "ghost" | "muted" | "primary" | "gift";
+  className?: string;
 }
 
 export function IconButton({
@@ -30,6 +31,7 @@ export function IconButton({
   onPress,
   accessibilityLabel,
   variant = "ghost",
+  className,
 }: IconButtonProps) {
   return (
     <Pressable
@@ -39,6 +41,7 @@ export function IconButton({
       className={clsx(
         "h-9 w-9 items-center justify-center rounded-[10px]",
         DEFAULT_BG_CLASSNAME[variant],
+        className,
       )}
     >
       <Icon name={name} size={16} className={DEFAULT_ICON_CLASSNAME[variant]} />

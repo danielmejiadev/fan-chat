@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
 
+import { IconButton } from "@/components/ui/IconButton";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
 import { formatUsdFromCents } from "@/features/purchases/constants/giftAmounts";
@@ -84,7 +85,14 @@ export function GiftModal({
             "max-w-md": !isDesktop,
           })}
         >
-          <GiftModalHeader conversation={conversation} onClose={onClose} />
+          <IconButton
+            name="close"
+            onPress={onClose}
+            accessibilityLabel="Close"
+            className="absolute right-3 top-3 z-10"
+          />
+
+          <GiftModalHeader conversation={conversation} />
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className={clsx({ "flex-row gap-8": isDesktop, "gap-6": !isDesktop })}>
