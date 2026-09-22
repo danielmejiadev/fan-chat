@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { getEntitlementStatus } from "@/features/purchases/services/purchaseService";
-import type { EntitlementStatus } from "@/features/purchases/types";
+import { EntitlementStatus } from "@/features/purchases/types";
 
 export type UseEntitlementStatusResult = {
   entitlementStatus: EntitlementStatus;
@@ -9,19 +9,23 @@ export type UseEntitlementStatusResult = {
 };
 
 /**
- * getEntitlementStatus reads local storage synchronously and isn't reactive
- * on its own — this wraps it in state so a component (e.g. a header badge)
- * re-renders when something elsewhere (a confirmed purchase, a restore)
- * calls refresh().
+ * getEntitlementStatus reads local storage and isn't reactive on its own —
+ * this wraps it in state so a component (e.g. a header badge) re-renders
+ * when something elsewhere (a confirmed purchase, a restore) calls
+ * refresh(), or once the initial read resolves.
  */
 export function useEntitlementStatus(productId: string): UseEntitlementStatusResult {
-  const [entitlementStatus, setEntitlementStatus] = useState<EntitlementStatus>(() =>
-    getEntitlementStatus(productId),
+  const [entitlementStatus, setEntitlementStatus] = useState<EntitlementStatus>(
+    EntitlementStatus.Pending,
   );
 
   const refresh = useCallback(() => {
-    setEntitlementStatus(getEntitlementStatus(productId));
+    getEntitlementStatus(productId).then(setEntitlementStatus);
   }, [productId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return { entitlementStatus, refresh };
 }

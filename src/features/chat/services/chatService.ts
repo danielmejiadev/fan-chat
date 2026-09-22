@@ -73,7 +73,7 @@ export function resetChatServiceStore(): void {
  * Writes the message to the local outbox before any network attempt, so it
  * survives a force-quit while still "pending".
  */
-export function enqueueMessage(conversationId: string, text: string): ClientMessage {
+export async function enqueueMessage(conversationId: string, text: string): Promise<ClientMessage> {
   const message: ClientMessage = {
     clientId: generateUuid(),
     conversationId,
@@ -82,7 +82,7 @@ export function enqueueMessage(conversationId: string, text: string): ClientMess
     status: MessageStatus.Pending,
   };
 
-  resolveStore().insertPendingMessage(message);
+  await resolveStore().insertPendingMessage(message);
 
   return message;
 }
@@ -94,16 +94,19 @@ export function enqueueMessage(conversationId: string, text: string): ClientMess
  * dedupes by clientId resolves it to a single message no matter how many
  * times this runs.
  */
-export function flushPendingMessages(conversationId: string, senderId: string): void {
+export async function flushPendingMessages(
+  conversationId: string,
+  senderId: string,
+): Promise<void> {
   const chatStore = resolveStore();
   const backend = getConversationBackend(conversationId);
-  const pendingMessages = chatStore.getPendingMessages(conversationId);
+  const pendingMessages = await chatStore.getPendingMessages(conversationId);
 
   const shouldDropNextResponse = conversationIdsWithDroppedResponse.delete(conversationId);
   const shouldRejectNextMessage = conversationIdsWithRejectedContent.delete(conversationId);
 
   for (const [index, pendingMessage] of pendingMessages.entries()) {
-    chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Sent);
+    await chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Sent);
 
     try {
       const serverMessage = backend.submitMessage(pendingMessage, senderId, {
@@ -111,16 +114,16 @@ export function flushPendingMessages(conversationId: string, senderId: string): 
         rejectContent: shouldRejectNextMessage && index === 0,
       });
 
-      chatStore.recordAcceptedClientId(pendingMessage.clientId, serverMessage.serverId);
-      chatStore.insertMessage(serverMessage);
-      chatStore.deletePendingMessage(pendingMessage.clientId);
+      await chatStore.recordAcceptedClientId(pendingMessage.clientId, serverMessage.serverId);
+      await chatStore.insertMessage(serverMessage);
+      await chatStore.deletePendingMessage(pendingMessage.clientId);
     } catch (error) {
       const failureReason =
         error instanceof ContentRejectedError
           ? MessageFailureReason.Rejected
           : MessageFailureReason.Recoverable;
 
-      chatStore.updatePendingMessageStatus(
+      await chatStore.updatePendingMessageStatus(
         pendingMessage.clientId,
         MessageStatus.Failed,
         failureReason,
@@ -134,11 +137,11 @@ export function flushPendingMessages(conversationId: string, senderId: string): 
  * confirmed retry). insertMessage is keyed by serverId, so replaying the
  * same batch never duplicates the thread.
  */
-export function receiveMessages(serverMessages: ServerMessage[]): void {
+export async function receiveMessages(serverMessages: ServerMessage[]): Promise<void> {
   const chatStore = resolveStore();
 
   for (const serverMessage of serverMessages) {
-    chatStore.insertMessage(serverMessage);
+    await chatStore.insertMessage(serverMessage);
   }
 }
 
@@ -148,13 +151,13 @@ export function receiveMessages(serverMessages: ServerMessage[]): void {
  * submitMessage's return value, so this is what surfaces messages the
  * backend accepted while the client was offline or a response was lost.
  */
-export function syncThread(conversationId: string): void {
+export async function syncThread(conversationId: string): Promise<void> {
   const backend = getConversationBackend(conversationId);
 
-  receiveMessages(backend.listMessages(conversationId));
+  await receiveMessages(backend.listMessages(conversationId));
 }
 
-export function getConfirmedThread(conversationId: string): ServerMessage[] {
+export async function getConfirmedThread(conversationId: string): Promise<ServerMessage[]> {
   return resolveStore().getThreadMessages(conversationId);
 }
 
@@ -165,10 +168,13 @@ export function getConfirmedThread(conversationId: string): ServerMessage[] {
  * re-reading on every call. Fine at this scale; worth revisiting in Phase 5
  * if profiling shows it's the bottleneck on the 50k-message conversation.
  */
-export function getConfirmedMessagesPage(conversationId: string, limit: number): ServerMessage[] {
+export async function getConfirmedMessagesPage(
+  conversationId: string,
+  limit: number,
+): Promise<ServerMessage[]> {
   return resolveStore().getThreadMessagesPage(conversationId, { limit });
 }
 
-export function getPendingMessages(conversationId: string): ClientMessage[] {
+export async function getPendingMessages(conversationId: string): Promise<ClientMessage[]> {
   return resolveStore().getPendingMessages(conversationId);
 }

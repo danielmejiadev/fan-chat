@@ -4,7 +4,9 @@ import type { ClientMessage, ServerMessage } from "@/features/chat/types";
 /**
  * In-memory ChatStore for tests — expo-sqlite is a native module that does
  * not run under Jest/Node, so unit tests exercise the same ChatStore
- * contract against this fake instead of createSqliteChatStore.
+ * contract against this fake instead of createSqliteChatStore. Stays
+ * logically synchronous internally; only the return values are wrapped in
+ * Promises to satisfy the async ChatStore contract.
  */
 export function createInMemoryChatStore(): ChatStore {
   const pendingMessages = new Map<string, ClientMessage>();
@@ -12,47 +14,47 @@ export function createInMemoryChatStore(): ChatStore {
   const messages = new Map<string, ServerMessage>();
 
   return {
-    insertPendingMessage(message) {
+    async insertPendingMessage(message) {
       pendingMessages.set(message.clientId, message);
     },
-    updatePendingMessageStatus(clientId, status, failureReason) {
+    async updatePendingMessageStatus(clientId, status, failureReason) {
       const existing = pendingMessages.get(clientId);
       if (existing !== undefined) {
         pendingMessages.set(clientId, { ...existing, status, failureReason });
       }
     },
-    deletePendingMessage(clientId) {
+    async deletePendingMessage(clientId) {
       pendingMessages.delete(clientId);
     },
-    getPendingMessages(conversationId) {
+    async getPendingMessages(conversationId) {
       return Array.from(pendingMessages.values())
         .filter((message) => message.conversationId === conversationId)
         .sort((a, b) => a.createdAt - b.createdAt);
     },
-    isClientIdAccepted(clientId) {
+    async isClientIdAccepted(clientId) {
       return acceptedClientIds.has(clientId);
     },
-    recordAcceptedClientId(clientId, serverId) {
+    async recordAcceptedClientId(clientId, serverId) {
       acceptedClientIds.set(clientId, serverId);
     },
-    insertMessage(message) {
+    async insertMessage(message) {
       if (!messages.has(message.serverId)) {
         messages.set(message.serverId, message);
       }
     },
-    getThreadMessages(conversationId) {
+    async getThreadMessages(conversationId) {
       return Array.from(messages.values())
         .filter((message) => message.conversationId === conversationId)
         .sort((a, b) => a.createdAt - b.createdAt);
     },
-    insertMessages(newMessages) {
+    async insertMessages(newMessages) {
       for (const message of newMessages) {
         if (!messages.has(message.serverId)) {
           messages.set(message.serverId, message);
         }
       }
     },
-    countMessages(conversationId) {
+    async countMessages(conversationId) {
       let count = 0;
       for (const message of messages.values()) {
         if (message.conversationId === conversationId) {
@@ -61,7 +63,7 @@ export function createInMemoryChatStore(): ChatStore {
       }
       return count;
     },
-    getThreadMessagesPage(conversationId, options) {
+    async getThreadMessagesPage(conversationId, options) {
       const { before } = options;
 
       return Array.from(messages.values())

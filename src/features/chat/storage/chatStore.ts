@@ -22,21 +22,21 @@ export type MessagePageCursor = {
  * SQLite binary.
  */
 export type ChatStore = {
-  insertPendingMessage: (message: ClientMessage) => void;
+  insertPendingMessage: (message: ClientMessage) => Promise<void>;
   updatePendingMessageStatus: (
     clientId: string,
     status: MessageStatus,
     failureReason?: MessageFailureReason,
-  ) => void;
-  deletePendingMessage: (clientId: string) => void;
-  getPendingMessages: (conversationId: string) => ClientMessage[];
-  isClientIdAccepted: (clientId: string) => boolean;
-  recordAcceptedClientId: (clientId: string, serverId: string) => void;
-  insertMessage: (message: ServerMessage) => void;
-  getThreadMessages: (conversationId: string) => ServerMessage[];
+  ) => Promise<void>;
+  deletePendingMessage: (clientId: string) => Promise<void>;
+  getPendingMessages: (conversationId: string) => Promise<ClientMessage[]>;
+  isClientIdAccepted: (clientId: string) => Promise<boolean>;
+  recordAcceptedClientId: (clientId: string, serverId: string) => Promise<void>;
+  insertMessage: (message: ServerMessage) => Promise<void>;
+  getThreadMessages: (conversationId: string) => Promise<ServerMessage[]>;
   /** Bulk insert for seeding large datasets — wrapped in a single transaction. */
-  insertMessages: (messages: ServerMessage[]) => void;
-  countMessages: (conversationId: string) => number;
+  insertMessages: (messages: ServerMessage[]) => Promise<void>;
+  countMessages: (conversationId: string) => Promise<number>;
   /**
    * Newest-first page of the thread. Without `before`, returns the most
    * recent `limit` messages. With `before`, returns the next `limit`
@@ -46,5 +46,5 @@ export type ChatStore = {
   getThreadMessagesPage: (
     conversationId: string,
     options: { limit: number; before?: MessagePageCursor },
-  ) => ServerMessage[];
+  ) => Promise<ServerMessage[]>;
 };

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { enqueueMessage, getPendingMessages } from "@/features/chat/services/chatService";
 import { MessageStatus, type ClientMessage } from "@/features/chat/types";
@@ -15,18 +15,22 @@ export type UsePendingMessagesResult = {
  * has queued but the server hasn't confirmed yet.
  */
 export function usePendingMessages(conversationId: string): UsePendingMessagesResult {
-  const [pendingMessages, setPendingMessages] = useState<ClientMessage[]>(() =>
-    getPendingMessages(conversationId),
-  );
+  const [pendingMessages, setPendingMessages] = useState<ClientMessage[]>([]);
 
   const refresh = useCallback(() => {
-    setPendingMessages(getPendingMessages(conversationId));
+    void getPendingMessages(conversationId).then(setPendingMessages);
   }, [conversationId]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const send = useCallback(
     (text: string) => {
-      enqueueMessage(conversationId, text);
-      refresh();
+      void enqueueMessage(conversationId, text).then((message) => {
+        setPendingMessages((currentPendingMessages) => [...currentPendingMessages, message]);
+        refresh();
+      });
     },
     [conversationId, refresh],
   );

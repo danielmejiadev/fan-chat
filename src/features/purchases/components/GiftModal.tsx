@@ -61,11 +61,11 @@ export function GiftModal({
   }, [state, selectedAmountCents, onGiftSent, onEntitlementChange, reset, onClose]);
 
   const handlePay = () => {
-    pay(selectedAmountCents, debugOutcome);
+    void pay(selectedAmountCents, debugOutcome);
   };
 
-  const handleRestore = () => {
-    const didRestore = restore();
+  const handleRestore = async () => {
+    const didRestore = await restore();
     if (didRestore) {
       onEntitlementChange();
     }

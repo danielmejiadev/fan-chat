@@ -11,9 +11,9 @@ import { resetPurchaseBackend } from "@/mockApi/purchases/purchaseBackendRegistr
  * conversations and gift entitlements from scratch. Spans both features —
  * that's why it lives here instead of inside chat/ or purchases/.
  */
-export function resetDemoData(): void {
-  clearChatData();
-  clearPurchasesData();
+export async function resetDemoData(): Promise<void> {
+  await clearChatData();
+  await clearPurchasesData();
   resetChatServiceStore();
   resetConversationBackends();
   resetPurchaseServiceStore();

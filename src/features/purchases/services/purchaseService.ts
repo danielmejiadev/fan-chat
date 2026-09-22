@@ -35,15 +35,16 @@ export function resetPurchaseServiceStore(): void {
  * Keyed by productId so repeated taps on "Pay" while a purchase is still
  * Pending never create a second one.
  */
-export function initiatePurchase(
+export async function initiatePurchase(
   productId: string,
   priceCents: number,
   currency: string,
-): StorePurchase {
+): Promise<StorePurchase> {
   const purchaseStore = resolveStore();
-  const existingPendingPurchase = purchaseStore
-    .getPurchasesForProduct(productId)
-    .find((purchase) => purchase.status === StorePurchaseStatus.Pending);
+  const existingPurchasesForProduct = await purchaseStore.getPurchasesForProduct(productId);
+  const existingPendingPurchase = existingPurchasesForProduct.find(
+    (purchase) => purchase.status === StorePurchaseStatus.Pending,
+  );
 
   if (existingPendingPurchase !== undefined) {
     return existingPendingPurchase;
@@ -58,7 +59,7 @@ export function initiatePurchase(
     createdAt: Date.now(),
   };
 
-  purchaseStore.insertPurchase(purchase);
+  await purchaseStore.insertPurchase(purchase);
 
   return purchase;
 }
@@ -68,14 +69,14 @@ export function initiatePurchase(
  * (succeeded, canceled or failed). This is only the store's response —
  * access is never granted from this alone, see confirmPurchase.
  */
-export function processPurchase(
+export async function processPurchase(
   purchase: StorePurchase,
   userId: string,
   options?: { outcome?: PurchaseAttemptOutcome },
-): StorePurchase {
+): Promise<StorePurchase> {
   const resolvedPurchase = getPurchaseBackend().purchase(purchase, userId, options);
 
-  resolveStore().updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
+  await resolveStore().updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
 
   return resolvedPurchase;
 }
@@ -86,10 +87,10 @@ export function processPurchase(
  * access. Upserted by purchaseId, so a duplicate confirmation event (e.g. a
  * repeated webhook) never grants access twice.
  */
-export function confirmPurchase(purchaseId: string): PurchaseConfirmation {
+export async function confirmPurchase(purchaseId: string): Promise<PurchaseConfirmation> {
   const confirmation = getPurchaseBackend().confirmEntitlement(purchaseId);
 
-  resolveStore().upsertConfirmation(confirmation);
+  await resolveStore().upsertConfirmation(confirmation);
 
   return confirmation;
 }
@@ -100,13 +101,13 @@ export function confirmPurchase(purchaseId: string): PurchaseConfirmation {
  * confirmation are upserted by their primary key, so restoring the same
  * purchase twice has no further effect.
  */
-export function restorePurchases(userId: string): StorePurchase[] {
+export async function restorePurchases(userId: string): Promise<StorePurchase[]> {
   const purchaseStore = resolveStore();
   const restoredPurchases = getPurchaseBackend().restorePurchases(userId);
 
   for (const restoredPurchase of restoredPurchases) {
-    purchaseStore.insertPurchase(restoredPurchase);
-    purchaseStore.upsertConfirmation({
+    await purchaseStore.insertPurchase(restoredPurchase);
+    await purchaseStore.upsertConfirmation({
       purchaseId: restoredPurchase.purchaseId,
       entitlementStatus: EntitlementStatus.Active,
       confirmedAt: Date.now(),
@@ -123,13 +124,16 @@ export function restorePurchases(userId: string): StorePurchase[] {
  * demotes it. A succeeded purchase with no confirmation yet reads as
  * Pending, never Active — that is the honest "delayed confirmation" state.
  */
-export function getEntitlementStatus(productId: string): EntitlementStatus {
+export async function getEntitlementStatus(productId: string): Promise<EntitlementStatus> {
   const purchaseStore = resolveStore();
-  const purchasesForProduct = purchaseStore.getPurchasesForProduct(productId);
+  const purchasesForProduct = await purchaseStore.getPurchasesForProduct(productId);
 
-  const confirmations = purchasesForProduct
-    .map((purchase) => purchaseStore.getConfirmation(purchase.purchaseId))
-    .filter((confirmation): confirmation is PurchaseConfirmation => confirmation !== undefined);
+  const confirmationResults = await Promise.all(
+    purchasesForProduct.map((purchase) => purchaseStore.getConfirmation(purchase.purchaseId)),
+  );
+  const confirmations = confirmationResults.filter(
+    (confirmation): confirmation is PurchaseConfirmation => confirmation !== undefined,
+  );
 
   if (
     confirmations.some(

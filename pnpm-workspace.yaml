@@ -1,5 +1,6 @@
 allowBuilds:
   '@parcel/watcher': true
+  esbuild: set this to true or false
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - '@tanstack/query-core@5.103.2'

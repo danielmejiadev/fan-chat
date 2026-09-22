@@ -59,81 +59,81 @@ afterEach(() => {
 });
 
 describe("chatService bug reproduction: lost response after retry", () => {
-  it("documents the bug — a backend that does not dedupe by clientId creates two messages", () => {
+  it("documents the bug — a backend that does not dedupe by clientId creates two messages", async () => {
     const buggyBackend = createMockChatBackend(false);
 
-    const message = enqueueMessage(conversationId, "hello");
+    const message = await enqueueMessage(conversationId, "hello");
 
     // First attempt: backend accepts and stores it, but the response is lost.
     const droppingOnce = createResponseDroppingBackend(buggyBackend, [message.clientId]);
     setConversationBackendForTests(conversationId, droppingOnce);
-    flushPendingMessages(conversationId, senderId);
-    expect(getPendingMessages(conversationId)[0].status).toBe(MessageStatus.Failed);
+    await flushPendingMessages(conversationId, senderId);
+    expect((await getPendingMessages(conversationId))[0].status).toBe(MessageStatus.Failed);
 
     // Retry: same clientId, but the buggy backend has no memory of it — a
     // second message is created server-side.
     setConversationBackendForTests(conversationId, buggyBackend);
-    flushPendingMessages(conversationId, senderId);
+    await flushPendingMessages(conversationId, senderId);
 
     // Reconnect sync pulls the backend's canonical thread, surfacing both.
-    syncThread(conversationId);
+    await syncThread(conversationId);
 
-    expect(getConfirmedThread(conversationId)).toHaveLength(2);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(2);
   });
 });
 
 describe("chatService fix: idempotent retry after a lost response", () => {
-  it("resolves to a single message no matter how many times the retry runs", () => {
+  it("resolves to a single message no matter how many times the retry runs", async () => {
     const backend = createMockChatBackend(true);
 
-    const message = enqueueMessage(conversationId, "hello");
+    const message = await enqueueMessage(conversationId, "hello");
 
     const droppingOnce = createResponseDroppingBackend(backend, [message.clientId]);
     setConversationBackendForTests(conversationId, droppingOnce);
-    flushPendingMessages(conversationId, senderId);
-    expect(getPendingMessages(conversationId)[0].status).toBe(MessageStatus.Failed);
-    expect(getConfirmedThread(conversationId)).toHaveLength(0);
+    await flushPendingMessages(conversationId, senderId);
+    expect((await getPendingMessages(conversationId))[0].status).toBe(MessageStatus.Failed);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(0);
 
     setConversationBackendForTests(conversationId, backend);
-    flushPendingMessages(conversationId, senderId);
-    syncThread(conversationId);
+    await flushPendingMessages(conversationId, senderId);
+    await syncThread(conversationId);
 
-    const thread = getConfirmedThread(conversationId);
+    const thread = await getConfirmedThread(conversationId);
     expect(thread).toHaveLength(1);
     expect(thread[0].text).toBe("hello");
-    expect(getPendingMessages(conversationId)).toHaveLength(0);
+    expect(await getPendingMessages(conversationId)).toHaveLength(0);
   });
 
-  it("still resolves to one message after a third redundant retry", () => {
+  it("still resolves to one message after a third redundant retry", async () => {
     setConversationBackendForTests(conversationId, createMockChatBackend(true));
 
-    enqueueMessage(conversationId, "hello");
+    await enqueueMessage(conversationId, "hello");
 
-    flushPendingMessages(conversationId, senderId);
-    flushPendingMessages(conversationId, senderId);
-    flushPendingMessages(conversationId, senderId);
-    syncThread(conversationId);
+    await flushPendingMessages(conversationId, senderId);
+    await flushPendingMessages(conversationId, senderId);
+    await flushPendingMessages(conversationId, senderId);
+    await syncThread(conversationId);
 
-    expect(getConfirmedThread(conversationId)).toHaveLength(1);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(1);
   });
 });
 
 describe("chatService offline queueing", () => {
-  it("keeps messages pending, in order, until they are flushed", () => {
-    enqueueMessage(conversationId, "first");
-    enqueueMessage(conversationId, "second");
-    enqueueMessage(conversationId, "third");
+  it("keeps messages pending, in order, until they are flushed", async () => {
+    await enqueueMessage(conversationId, "first");
+    await enqueueMessage(conversationId, "second");
+    await enqueueMessage(conversationId, "third");
 
-    const pending = getPendingMessages(conversationId);
+    const pending = await getPendingMessages(conversationId);
 
     expect(pending.map((message) => message.text)).toEqual(["first", "second", "third"]);
     expect(pending.every((message) => message.status === MessageStatus.Pending)).toBe(true);
-    expect(getConfirmedThread(conversationId)).toHaveLength(0);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(0);
   });
 });
 
 describe("chatService incoming message reconciliation", () => {
-  it("does not duplicate the thread when the same batch is received twice", () => {
+  it("does not duplicate the thread when the same batch is received twice", async () => {
     const incoming: ServerMessage[] = [
       {
         serverId: "srv_a",
@@ -169,15 +169,15 @@ describe("chatService incoming message reconciliation", () => {
       },
     ];
 
-    receiveMessages(incoming);
-    receiveMessages(incoming);
+    await receiveMessages(incoming);
+    await receiveMessages(incoming);
 
-    expect(getConfirmedThread(conversationId)).toHaveLength(4);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(4);
   });
 });
 
 describe("chatService failure handling", () => {
-  it("preserves the text and marks the message failed when the backend rejects it", () => {
+  it("preserves the text and marks the message failed when the backend rejects it", async () => {
     const unreachableBackend: MockChatBackend = {
       submitMessage() {
         throw new Error("network unreachable");
@@ -191,10 +191,10 @@ describe("chatService failure handling", () => {
     };
     setConversationBackendForTests(conversationId, unreachableBackend);
 
-    enqueueMessage(conversationId, "please deliver");
-    flushPendingMessages(conversationId, senderId);
+    await enqueueMessage(conversationId, "please deliver");
+    await flushPendingMessages(conversationId, senderId);
 
-    const pending = getPendingMessages(conversationId);
+    const pending = await getPendingMessages(conversationId);
     expect(pending).toHaveLength(1);
     expect(pending[0].status).toBe(MessageStatus.Failed);
     expect(pending[0].text).toBe("please deliver");

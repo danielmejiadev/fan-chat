@@ -1,4 +1,7 @@
-import { getDatabase } from "@/lib/database";
+import { and, count, desc, eq, lt, or } from "drizzle-orm";
+
+import { getAppDatabase } from "@/lib/database";
+import { acceptedClientIds, messages, pendingMessages } from "@/features/chat/storage/schema";
 import type { ChatStore, MessagePageCursor } from "@/features/chat/storage/chatStore";
 import type {
   ClientMessage,
@@ -7,217 +10,131 @@ import type {
   ServerMessage,
 } from "@/features/chat/types";
 
-/**
- * pending_messages: the local outbox, written before a message is ever sent
- * so 3 offline messages (and their order) survive a force-quit.
- *
- * accepted_client_ids: idempotency table kept separate from the outbox — the
- * mock backend consults it to tell a genuine retry from a duplicate submit.
- *
- * messages: the reconciled thread as confirmed by the mock backend.
- */
-export function initChatSchema(): void {
-  const database = getDatabase();
-
-  database.execSync(`
-    CREATE TABLE IF NOT EXISTS pending_messages (
-      clientId TEXT PRIMARY KEY NOT NULL,
-      conversationId TEXT NOT NULL,
-      text TEXT NOT NULL,
-      createdAt INTEGER NOT NULL,
-      status TEXT NOT NULL,
-      failureReason TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS accepted_client_ids (
-      clientId TEXT PRIMARY KEY NOT NULL,
-      serverId TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS messages (
-      serverId TEXT PRIMARY KEY NOT NULL,
-      clientId TEXT,
-      conversationId TEXT NOT NULL,
-      senderId TEXT NOT NULL,
-      text TEXT NOT NULL,
-      createdAt INTEGER NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_messages_conversation
-      ON messages (conversationId, createdAt);
-
-    CREATE INDEX IF NOT EXISTS idx_pending_messages_conversation
-      ON pending_messages (conversationId, createdAt);
-  `);
-}
-
 /** Wipes every chat table — used by the demo's reset action, never in normal app flow. */
-export function clearChatData(): void {
-  const database = getDatabase();
+export async function clearChatData(): Promise<void> {
+  const database = getAppDatabase();
 
-  database.execSync(`
-    DELETE FROM pending_messages;
-    DELETE FROM accepted_client_ids;
-    DELETE FROM messages;
-  `);
+  await database.delete(pendingMessages);
+  await database.delete(acceptedClientIds);
+  await database.delete(messages);
 }
 
 export function createSqliteChatStore(): ChatStore {
-  const database = getDatabase();
+  const database = getAppDatabase();
 
   return {
-    insertPendingMessage(message: ClientMessage): void {
-      database.runSync(
-        `INSERT INTO pending_messages (clientId, conversationId, text, createdAt, status)
-         VALUES ($clientId, $conversationId, $text, $createdAt, $status)`,
-        {
-          $clientId: message.clientId,
-          $conversationId: message.conversationId,
-          $text: message.text,
-          $createdAt: message.createdAt,
-          $status: message.status,
-        },
-      );
-    },
-
-    updatePendingMessageStatus(
-      clientId: string,
-      status: MessageStatus,
-      failureReason?: MessageFailureReason,
-    ): void {
-      database.runSync(
-        `UPDATE pending_messages SET status = $status, failureReason = $failureReason
-         WHERE clientId = $clientId`,
-        {
-          $status: status,
-          $failureReason: failureReason ?? null,
-          $clientId: clientId,
-        },
-      );
-    },
-
-    deletePendingMessage(clientId: string): void {
-      database.runSync(`DELETE FROM pending_messages WHERE clientId = $clientId`, {
-        $clientId: clientId,
+    async insertPendingMessage(message: ClientMessage): Promise<void> {
+      await database.insert(pendingMessages).values({
+        clientId: message.clientId,
+        conversationId: message.conversationId,
+        text: message.text,
+        createdAt: message.createdAt,
+        status: message.status,
       });
     },
 
-    getPendingMessages(conversationId: string): ClientMessage[] {
-      const rows = database.getAllSync<
-        ClientMessage & { failureReason: MessageFailureReason | null }
-      >(
-        `SELECT clientId, conversationId, text, createdAt, status, failureReason
-         FROM pending_messages
-         WHERE conversationId = $conversationId
-         ORDER BY createdAt ASC`,
-        { $conversationId: conversationId },
-      );
+    async updatePendingMessageStatus(
+      clientId: string,
+      status: MessageStatus,
+      failureReason?: MessageFailureReason,
+    ): Promise<void> {
+      await database
+        .update(pendingMessages)
+        .set({ status, failureReason: failureReason ?? null })
+        .where(eq(pendingMessages.clientId, clientId));
+    },
+
+    async deletePendingMessage(clientId: string): Promise<void> {
+      await database.delete(pendingMessages).where(eq(pendingMessages.clientId, clientId));
+    },
+
+    async getPendingMessages(conversationId: string): Promise<ClientMessage[]> {
+      const rows = await database
+        .select()
+        .from(pendingMessages)
+        .where(eq(pendingMessages.conversationId, conversationId))
+        .orderBy(pendingMessages.createdAt);
 
       return rows.map(({ failureReason, ...row }) => ({
         ...row,
-        ...(failureReason !== null ? { failureReason } : {}),
+        status: row.status as MessageStatus,
+        ...(failureReason !== null ? { failureReason: failureReason as MessageFailureReason } : {}),
       }));
     },
 
-    isClientIdAccepted(clientId: string): boolean {
-      const row = database.getFirstSync<{ clientId: string }>(
-        `SELECT clientId FROM accepted_client_ids WHERE clientId = $clientId`,
-        { $clientId: clientId },
-      );
+    async isClientIdAccepted(clientId: string): Promise<boolean> {
+      const rows = await database
+        .select({ clientId: acceptedClientIds.clientId })
+        .from(acceptedClientIds)
+        .where(eq(acceptedClientIds.clientId, clientId))
+        .limit(1);
 
-      return row !== null;
+      return rows.length > 0;
     },
 
-    recordAcceptedClientId(clientId: string, serverId: string): void {
-      database.runSync(
-        `INSERT OR IGNORE INTO accepted_client_ids (clientId, serverId) VALUES ($clientId, $serverId)`,
-        { $clientId: clientId, $serverId: serverId },
-      );
+    async recordAcceptedClientId(clientId: string, serverId: string): Promise<void> {
+      await database.insert(acceptedClientIds).values({ clientId, serverId }).onConflictDoNothing();
     },
 
-    insertMessage(message: ServerMessage): void {
-      database.runSync(
-        `INSERT OR IGNORE INTO messages (serverId, clientId, conversationId, senderId, text, createdAt)
-         VALUES ($serverId, $clientId, $conversationId, $senderId, $text, $createdAt)`,
-        {
-          $serverId: message.serverId,
-          $clientId: message.clientId,
-          $conversationId: message.conversationId,
-          $senderId: message.senderId,
-          $text: message.text,
-          $createdAt: message.createdAt,
-        },
-      );
+    async insertMessage(message: ServerMessage): Promise<void> {
+      await database.insert(messages).values(message).onConflictDoNothing();
     },
 
-    getThreadMessages(conversationId: string): ServerMessage[] {
-      return database.getAllSync<ServerMessage>(
-        `SELECT serverId, clientId, conversationId, senderId, text, createdAt
-         FROM messages
-         WHERE conversationId = $conversationId
-         ORDER BY createdAt ASC`,
-        { $conversationId: conversationId },
-      );
+    async getThreadMessages(conversationId: string): Promise<ServerMessage[]> {
+      const rows = await database
+        .select()
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId))
+        .orderBy(messages.createdAt);
+
+      return rows;
     },
 
-    insertMessages(messages: ServerMessage[]): void {
-      database.withTransactionSync(() => {
-        for (const message of messages) {
-          database.runSync(
-            `INSERT OR IGNORE INTO messages (serverId, clientId, conversationId, senderId, text, createdAt)
-             VALUES ($serverId, $clientId, $conversationId, $senderId, $text, $createdAt)`,
-            {
-              $serverId: message.serverId,
-              $clientId: message.clientId,
-              $conversationId: message.conversationId,
-              $senderId: message.senderId,
-              $text: message.text,
-              $createdAt: message.createdAt,
-            },
-          );
+    async insertMessages(newMessages: ServerMessage[]): Promise<void> {
+      await database.transaction(async (transaction) => {
+        for (const message of newMessages) {
+          await transaction.insert(messages).values(message).onConflictDoNothing();
         }
       });
     },
 
-    countMessages(conversationId: string): number {
-      const row = database.getFirstSync<{ count: number }>(
-        `SELECT COUNT(*) as count FROM messages WHERE conversationId = $conversationId`,
-        { $conversationId: conversationId },
-      );
+    async countMessages(conversationId: string): Promise<number> {
+      const rows = await database
+        .select({ count: count() })
+        .from(messages)
+        .where(eq(messages.conversationId, conversationId));
 
-      return row?.count ?? 0;
+      return rows[0]?.count ?? 0;
     },
 
-    getThreadMessagesPage(
+    async getThreadMessagesPage(
       conversationId: string,
       options: { limit: number; before?: MessagePageCursor },
-    ): ServerMessage[] {
-      if (options.before === undefined) {
-        return database.getAllSync<ServerMessage>(
-          `SELECT serverId, clientId, conversationId, senderId, text, createdAt
-           FROM messages
-           WHERE conversationId = $conversationId
-           ORDER BY createdAt DESC, serverId DESC
-           LIMIT $limit`,
-          { $conversationId: conversationId, $limit: options.limit },
-        );
-      }
+    ): Promise<ServerMessage[]> {
+      const { before } = options;
 
-      return database.getAllSync<ServerMessage>(
-        `SELECT serverId, clientId, conversationId, senderId, text, createdAt
-         FROM messages
-         WHERE conversationId = $conversationId
-           AND (createdAt < $beforeCreatedAt
-                OR (createdAt = $beforeCreatedAt AND serverId < $beforeServerId))
-         ORDER BY createdAt DESC, serverId DESC
-         LIMIT $limit`,
-        {
-          $conversationId: conversationId,
-          $beforeCreatedAt: options.before.createdAt,
-          $beforeServerId: options.before.serverId,
-          $limit: options.limit,
-        },
-      );
+      const whereClause =
+        before === undefined
+          ? eq(messages.conversationId, conversationId)
+          : and(
+              eq(messages.conversationId, conversationId),
+              or(
+                lt(messages.createdAt, before.createdAt),
+                and(
+                  eq(messages.createdAt, before.createdAt),
+                  lt(messages.serverId, before.serverId),
+                ),
+              ),
+            );
+
+      const rows = await database
+        .select()
+        .from(messages)
+        .where(whereClause)
+        .orderBy(desc(messages.createdAt), desc(messages.serverId))
+        .limit(options.limit);
+
+      return rows;
     },
   };
 }

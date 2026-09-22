@@ -13,11 +13,13 @@ export const mockChatConnection: ChatConnection = {
     // fetched until connectivity returns — matches sendMessage still
     // writing to the local outbox immediately either way.
     const forceSync = () => {
-      if (isConnected) {
-        flushPendingMessages(conversationId, senderId);
-        syncThread(conversationId);
-      }
-      onChange();
+      void (async () => {
+        if (isConnected) {
+          await flushPendingMessages(conversationId, senderId);
+          await syncThread(conversationId);
+        }
+        onChange();
+      })();
     };
 
     forceSync();

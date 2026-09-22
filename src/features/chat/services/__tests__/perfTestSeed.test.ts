@@ -40,24 +40,24 @@ describe("ensurePerfTestMessagesSeeded", () => {
     resetPerfTestSeedStore();
   });
 
-  it("seeds the full dataset when the conversation is empty", () => {
+  it("seeds the full dataset when the conversation is empty", async () => {
     const store = createInMemoryChatStore();
     setPerfTestSeedStoreForTests(store);
 
-    ensurePerfTestMessagesSeeded();
+    await ensurePerfTestMessagesSeeded();
 
-    expect(store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
+    expect(await store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
   });
 
-  it("does not reseed when the dataset is already present", () => {
+  it("does not reseed when the dataset is already present", async () => {
     const store = createInMemoryChatStore();
     setPerfTestSeedStoreForTests(store);
     const insertMessagesSpy = jest.spyOn(store, "insertMessages");
 
-    ensurePerfTestMessagesSeeded();
-    ensurePerfTestMessagesSeeded();
+    await ensurePerfTestMessagesSeeded();
+    await ensurePerfTestMessagesSeeded();
 
     expect(insertMessagesSpy).toHaveBeenCalledTimes(1);
-    expect(store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
+    expect(await store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
   });
 });

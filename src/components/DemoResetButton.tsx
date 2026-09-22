@@ -18,8 +18,8 @@ interface DemoResetButtonProps {
 export function DemoResetButton({ variant }: DemoResetButtonProps) {
   const router = useRouter();
 
-  const handleReset = () => {
-    resetDemoData();
+  const handleReset = async () => {
+    await resetDemoData();
     router.replace("/");
   };
 

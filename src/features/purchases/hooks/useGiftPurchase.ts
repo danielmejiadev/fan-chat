@@ -24,7 +24,7 @@ export function useGiftPurchase(userId: string, productId: string) {
    * "succeeded" — production callers never pass it, so real behavior is
    * unaffected.
    */
-  const pay = (amountCents: number, debugOutcome?: PurchaseAttemptOutcome): void => {
+  const pay = async (amountCents: number, debugOutcome?: PurchaseAttemptOutcome): Promise<void> => {
     if (amountCents <= 0) {
       return;
     }
@@ -32,8 +32,8 @@ export function useGiftPurchase(userId: string, productId: string) {
     setState("pending");
     setErrorMessage(null);
 
-    const purchase = initiatePurchase(productId, amountCents, "USD");
-    const processedPurchase = processPurchase(
+    const purchase = await initiatePurchase(productId, amountCents, "USD");
+    const processedPurchase = await processPurchase(
       purchase,
       userId,
       debugOutcome !== undefined ? { outcome: debugOutcome } : undefined,
@@ -57,17 +57,17 @@ export function useGiftPurchase(userId: string, productId: string) {
     // only from a test with an injected backend.
     setState("pending-confirmation");
 
-    setTimeout(() => {
-      confirmPurchase(processedPurchase.purchaseId);
-      const entitlement = getEntitlementStatus(productId);
+    setTimeout(async () => {
+      await confirmPurchase(processedPurchase.purchaseId);
+      const entitlement = await getEntitlementStatus(productId);
       setState(entitlement === EntitlementStatus.Active ? "confirmed" : "pending");
     }, CONFIRMATION_DELAY_MS);
   };
 
   /** Restoring never demotes a still-valid entitlement gained some other way. */
-  const restore = (): boolean => {
-    restorePurchases(userId);
-    const entitlement = getEntitlementStatus(productId);
+  const restore = async (): Promise<boolean> => {
+    await restorePurchases(userId);
+    const entitlement = await getEntitlementStatus(productId);
 
     if (entitlement === EntitlementStatus.Active) {
       setState("confirmed");

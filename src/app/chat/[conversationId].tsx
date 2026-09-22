@@ -16,7 +16,7 @@ export default function ChatThreadScreen() {
     // "perf-test" is a dedicated conversation for profiling scroll/pagination
     // against a 50k-message history, not a real demo conversation.
     if (conversationId === PERF_TEST_CONVERSATION_ID) {
-      ensurePerfTestMessagesSeeded();
+      void ensurePerfTestMessagesSeeded();
     }
   }, [conversationId]);
 
