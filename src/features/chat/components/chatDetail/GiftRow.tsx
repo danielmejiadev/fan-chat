@@ -12,7 +12,7 @@ export function GiftRow({ text }: GiftRowProps) {
       <View className="h-9 w-9 items-center justify-center rounded-[10px] bg-surface-muted shadow-inset-primary">
         <Text className="text-base">🎁</Text>
       </View>
-      <Text className="flex-1 text-body text-foreground-primary">{text}</Text>
+      <Text className="shrink text-body text-foreground-primary">{text}</Text>
     </View>
   );
 }
