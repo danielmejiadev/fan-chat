@@ -26,7 +26,7 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
     `gift-${conversationId}`,
   );
 
-  const { messages, sendMessage, retryMessage, loadOlderMessages, forceSync } = useChatThread(
+  const { messages, sendMessage, retryMessage, loadOlderMessages } = useChatThread(
     conversationId,
     CURRENT_FAN_ID,
   );
@@ -62,11 +62,7 @@ export function ThreadPane({ conversationId }: ThreadPaneProps) {
           onEntitlementChange={refreshEntitlement}
         />
       </KeyboardAvoidingView>
-      <ChatDebugMenu
-        conversationId={conversationId}
-        participantId={conversation.participantId}
-        onForceSync={forceSync}
-      />
+      <ChatDebugMenu conversationId={conversationId} participantId={conversation.participantId} />
     </SafeAreaView>
   );
 }

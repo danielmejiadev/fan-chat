@@ -7,6 +7,7 @@ import {
 import {
   resetChatServiceStore,
   setChatServiceStoreForTests,
+  simulateIncomingMessages,
 } from "@/features/chat/services/chatService";
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
@@ -84,6 +85,7 @@ describe("useChatThread", () => {
       receiveIncomingMessage: () => {
         throw new Error("not used in this test");
       },
+      subscribe: () => () => {},
     };
     setConversationBackendForTests(conversationId, flakyBackend);
 
@@ -112,6 +114,44 @@ describe("useChatThread", () => {
 
     expect(result.current.messages).toHaveLength(1);
     expect(result.current.messages[0].origin).toBe("server");
+
+    unmount();
+  });
+
+  it("keeps a just-sent message visible when reconcile runs concurrently from multiple sources", async () => {
+    const { result, unmount } = await renderHook(() => useChatThread(conversationId, senderId));
+
+    // Mimics the real app: the connection reconciles on mount, and again
+    // whenever the backend notifies it (here, simulated incoming messages
+    // firing around the same time as a send) — all unguarded against each
+    // other before the fix. Firing several overlapping triggers around the
+    // send is what used to let a stale, in-flight read clobber the
+    // optimistic pending message.
+    await act(() => {
+      simulateIncomingMessages(conversationId, "creator-1", ["hi"]);
+      result.current.sendMessage("still here");
+      simulateIncomingMessages(conversationId, "creator-1", ["hi again"]);
+    });
+
+    const findSentMessage = () =>
+      result.current.messages.find((threadMessage) => threadMessage.message.text === "still here");
+
+    // Poll repeatedly instead of a single assertion, since the bug was the
+    // message disappearing transiently after first appearing.
+    for (let checkIndex = 0; checkIndex < 10; checkIndex += 1) {
+      expect(findSentMessage()).toBeDefined();
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    }
+
+    await waitFor(
+      () => {
+        expect(findSentMessage()?.origin).toBe("server");
+      },
+      { timeout: 3000 },
+    );
+    expect(result.current.messages).toHaveLength(3);
 
     unmount();
   });

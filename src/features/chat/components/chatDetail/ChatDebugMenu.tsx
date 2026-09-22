@@ -19,7 +19,6 @@ const SIMULATED_INCOMING_TEXTS = [
 interface ChatDebugMenuProps {
   conversationId: string;
   participantId: string;
-  onForceSync: () => void;
 }
 
 /**
@@ -28,7 +27,7 @@ interface ChatDebugMenuProps {
  * without a real backend to trigger them from. Always visible for this demo
  * build — there's no other way to reach these scenarios by tapping the app.
  */
-export function ChatDebugMenu({ conversationId, participantId, onForceSync }: ChatDebugMenuProps) {
+export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleDropNextResponse = () => {
@@ -42,8 +41,10 @@ export function ChatDebugMenu({ conversationId, participantId, onForceSync }: Ch
   };
 
   const handleSimulateIncoming = () => {
+    // simulateIncomingMessages pushes straight into the backend, which
+    // notifies mockChatConnection's own subscription — no separate sync
+    // trigger needed here.
     simulateIncomingMessages(conversationId, participantId, SIMULATED_INCOMING_TEXTS);
-    onForceSync();
     setIsOpen(false);
   };
 
