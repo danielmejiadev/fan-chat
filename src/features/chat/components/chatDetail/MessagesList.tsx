@@ -30,7 +30,10 @@ export function MessagesList({
         }
         onStartReached={onLoadOlderMessages}
         onStartReachedThreshold={0.5}
-        maintainVisibleContentPosition={{ startRenderingFromBottom: true }}
+        maintainVisibleContentPosition={{
+          startRenderingFromBottom: true,
+          autoscrollToBottomThreshold: 0.2,
+        }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 24 }}
         ListHeaderComponent={
           <Text className="mb-6 text-center text-caption text-foreground-date">Today</Text>
