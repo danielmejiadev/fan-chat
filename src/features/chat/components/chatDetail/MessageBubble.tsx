@@ -3,9 +3,11 @@ import { clsx } from "clsx";
 import { format } from "date-fns";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
 import { GiftRow } from "@/features/chat/components/chatDetail/GiftRow";
+import { getMessageDeliveryTick } from "@/features/chat/utils/getMessageDeliveryTick";
 import { MessageFailureReason, MessageStatus, type ThreadMessage } from "@/features/chat/types";
 
 const GIFT_MESSAGE_PATTERN = /sent a \$[\d.]+ gift/i;
@@ -30,6 +32,7 @@ export function MessageBubble({
     threadMessage.origin === "client" ? threadMessage.message.failureReason : undefined;
   const isRejected = failureReason === MessageFailureReason.Rejected;
   const isGiftMessage = GIFT_MESSAGE_PATTERN.test(threadMessage.message.text);
+  const deliveryTick = isOwnMessage ? getMessageDeliveryTick(threadMessage) : null;
 
   return (
     <View className={clsx("py-3", { "items-end": isOwnMessage, "items-start": !isOwnMessage })}>
@@ -52,9 +55,19 @@ export function MessageBubble({
           {!isGiftMessage && (
             <Text className="text-body text-foreground-primary">{threadMessage.message.text}</Text>
           )}
-          <Text className="mt-2.5 text-caption text-foreground-date">
-            {format(threadMessage.message.createdAt, "h:mm a")}
-          </Text>
+          <View className="mt-2.5 flex-row items-center gap-1">
+            <Text className="text-caption text-foreground-date">
+              {format(threadMessage.message.createdAt, "h:mm a")}
+            </Text>
+            {deliveryTick && (
+              <Icon
+                name={deliveryTick.iconName}
+                size={14}
+                accessibilityLabel={deliveryTick.accessibilityLabel}
+                className={deliveryTick.colorClassName}
+              />
+            )}
+          </View>
         </View>
       </View>
       {status === MessageStatus.Failed && threadMessage.origin === "client" && !isRejected && (
