@@ -25,26 +25,29 @@ export function getMessageDeliveryTick(threadMessage: ThreadMessage): MessageDel
     };
   }
 
-  switch (threadMessage.message.status) {
-    case MessageStatus.Pending:
-      return {
-        iconName: "time-outline",
-        accessibilityLabel: "Pending",
-        colorClassName: "text-foreground-secondary",
-      };
-    case MessageStatus.Sent:
-      return {
-        iconName: "checkmark",
-        accessibilityLabel: "Sent",
-        colorClassName: "text-foreground-date",
-      };
-    case MessageStatus.Failed:
-      return {
-        iconName: "alert-circle",
-        accessibilityLabel: "Failed to send",
-        colorClassName: "text-error",
-      };
-    default:
-      return null;
+  if (threadMessage.message.status === MessageStatus.Pending) {
+    return {
+      iconName: "time-outline",
+      accessibilityLabel: "Pending",
+      colorClassName: "text-foreground-secondary",
+    };
   }
+
+  if (threadMessage.message.status === MessageStatus.Sent) {
+    return {
+      iconName: "checkmark",
+      accessibilityLabel: "Sent",
+      colorClassName: "text-foreground-date",
+    };
+  }
+
+  if (threadMessage.message.status === MessageStatus.Failed) {
+    return {
+      iconName: "alert-circle",
+      accessibilityLabel: "Failed to send",
+      colorClassName: "text-error",
+    };
+  }
+
+  return null;
 }
