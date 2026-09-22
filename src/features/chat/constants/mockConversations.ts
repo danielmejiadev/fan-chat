@@ -1,3 +1,5 @@
+import { PERF_TEST_CONVERSATION_ID } from "@/features/chat/utils/generatePerfTestMessages";
+
 export const CURRENT_FAN_ID = "fan-1";
 
 export type Conversation = {
@@ -93,6 +95,16 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     lastMessageAt: THIRTY_SECONDS_AGO,
     isOnline: false,
     avatarTint: "#A5B4FC",
+  },
+  {
+    id: PERF_TEST_CONVERSATION_ID,
+    participantId: "perf-test-creator",
+    participantName: "Perf Test (50k messages)",
+    participantHandle: "@perftest",
+    lastMessagePreview: "50,000-message history for scroll/pagination profiling",
+    lastMessageAt: THIRTY_SECONDS_AGO,
+    isOnline: false,
+    avatarTint: "#D4D4D8",
   },
 ];
 

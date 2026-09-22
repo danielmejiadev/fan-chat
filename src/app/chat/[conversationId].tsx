@@ -1,13 +1,24 @@
 import { useLocalSearchParams } from "expo-router";
+import { useEffect } from "react";
 import { View } from "react-native";
 import { Conversations } from "@/features/chat/components/conversations/Conversations";
 import { DesktopSidebar } from "@/components/layout/DesktopSidebar";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 import { ThreadPane } from "@/features/chat/components/chatDetail/ThreadPane";
+import { ensurePerfTestMessagesSeeded } from "@/features/chat/services/perfTestSeed";
+import { PERF_TEST_CONVERSATION_ID } from "@/features/chat/utils/generatePerfTestMessages";
 
 export default function ChatThreadScreen() {
   const isDesktop = useIsDesktopLayout();
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
+
+  useEffect(() => {
+    // "perf-test" is a dedicated conversation for profiling scroll/pagination
+    // against a 50k-message history, not a real demo conversation.
+    if (conversationId === PERF_TEST_CONVERSATION_ID) {
+      ensurePerfTestMessagesSeeded();
+    }
+  }, [conversationId]);
 
   if (isDesktop) {
     return (

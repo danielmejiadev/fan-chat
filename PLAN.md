@@ -133,17 +133,21 @@ reintentos).
   `onStartReached`/`onStartReachedThreshold` + `useChatThread.loadOlderMessages`
   (ventana creciente de a 30). Genérico, ya funciona para cualquier
   conversación con historial largo.
-- [ ] **Falta enganchar la conversación de 50k al flujo real de UI**: hoy
-  `PERF_TEST_CONVERSATION_ID = "perf-test"` no aparece en
-  `mockConversations.ts` ni se llama `ensurePerfTestMessagesSeeded()` desde
-  ningún componente — solo se ejercita en tests. Hace falta: (a) agregar
-  esa conversación a la lista mock (o un entry point dedicado tipo
-  "Perf test" en el `DesktopSidebar`/`MobileTabBar`), (b) llamar
-  `ensurePerfTestMessagesSeeded()` al entrar, igual que
-  `ensureDemoConversationSeeded` para la demo normal.
-- [ ] Definir secuencia repetible de scroll + tipeo para perfilar después
-  (guion fijo: scroll rápido al fondo, scroll lento leyendo, escribir en
-  el input mientras se hace scroll) — depende del punto anterior.
+- [x] Conversación de 50k enganchada al flujo real de UI: entrada
+  "Perf Test (50k messages)" agregada a `MOCK_CONVERSATIONS`
+  (`id: PERF_TEST_CONVERSATION_ID`), visible en la lista como cualquier
+  otra conversación. `src/app/chat/[conversationId].tsx` llama
+  `ensurePerfTestMessagesSeeded()` en un `useEffect` cuando se abre esa
+  conversación (idempotente, no reinserta en aperturas repetidas).
+  **Nota**: el seed corre síncrono sobre SQLite la primera vez que se abre
+  — puede sentirse como un freno momentáneo al entrar por primera vez;
+  aceptable para este caso de uso (una sola vez), pero anotar en el README
+  como limitación conocida en vez de ocultarlo.
+- [ ] Definir y ejecutar a mano la secuencia repetible de scroll + tipeo
+  sobre esa conversación para perfilar (guion fijo: scroll rápido al
+  fondo, scroll lento leyendo, escribir en el input mientras se hace
+  scroll) — esto requiere correr la app en el Simulator/dispositivo real,
+  no se puede hacer desde este entorno de agente.
 
 ## Fase 4 — UI/UX/estilos
 
@@ -237,8 +241,13 @@ reintentos).
   ícono de reloj para pending, borde rojo + texto de error para failed) —
   falta pasada de revisión visual una vez el bug de SQLite esté resuelto y
   se pueda ver la app corriendo.
-- [ ] "Reduced motion" / transiciones — no evaluado todavía (ver nota
-  abajo).
+- [x] "Reduced motion": `useReducedMotion` (`src/hooks/useReducedMotion.ts`,
+  envuelve `AccessibilityInfo.isReduceMotionEnabled`/`reduceMotionChanged`)
+  + `OfflineBanner` con fade-in de entrada (`Animated`, 200ms,
+  `useNativeDriver: true`) que se salta cuando el sistema tiene reduced
+  motion activado. Patrón queda listo para reusar en otras transiciones
+  (gift modal, aparición de mensajes) si da tiempo — hoy solo aplicado al
+  banner de offline.
 - [ ] Revisión visual end-to-end del design kit (colores, tipografía,
   incluido el nuevo `.dark`) una vez la app corra en Simulator/web sin el
   bloqueo de SQLite — todo esto se hizo/verificó por typecheck, lint,
