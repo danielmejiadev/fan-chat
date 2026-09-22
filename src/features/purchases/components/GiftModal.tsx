@@ -13,6 +13,7 @@ import { GiftModalHeader } from "@/features/purchases/components/GiftModalHeader
 import { GiftPaymentDetailsForm } from "@/features/purchases/components/GiftPaymentDetailsForm";
 import { PaymentMethodSelector } from "@/features/purchases/components/PaymentMethodSelector";
 import { useGiftPurchase } from "@/features/purchases/hooks/useGiftPurchase";
+import { StorePurchaseStatus } from "@/features/purchases/types";
 import { giftFormSchema, type GiftFormValues } from "@/features/purchases/utils/giftFormSchema";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
@@ -42,7 +43,7 @@ export function GiftModal({
       email: "ethanss@gmail.com",
       amountCents: 0,
       paymentMethod: "card",
-      debugOutcome: undefined,
+      debugOutcome: StorePurchaseStatus.Succeeded,
     },
   });
   const { state, errorMessage, pay, restore, reset } = useGiftPurchase(

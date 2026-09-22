@@ -32,9 +32,11 @@ export function useChatThread(conversationId: string, senderId: string): UseChat
     refresh: refreshPendingMessages,
   } = usePendingMessages(conversationId);
 
+  // Confirmed messages must land in state before the message they replace is
+  // dropped from the pending outbox — otherwise there's a window where it's
+  // in neither list and its bubble briefly disappears.
   const refresh = useCallback(() => {
-    refreshConfirmedMessages();
-    refreshPendingMessages();
+    void refreshConfirmedMessages().then(() => refreshPendingMessages());
   }, [refreshConfirmedMessages, refreshPendingMessages]);
 
   const { forceSync } = useChatConnection(conversationId, senderId, refresh);

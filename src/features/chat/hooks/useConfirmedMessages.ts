@@ -10,7 +10,7 @@ export type UseConfirmedMessagesResult = {
   confirmedMessages: ServerMessage[];
   hasMore: boolean;
   loadMore: () => void;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 };
 
 /** Assumes it's remounted per conversationId, so it only ever has to handle a growing page size. */
@@ -22,25 +22,22 @@ export function useConfirmedMessages(conversationId: string): UseConfirmedMessag
   const [hasMore, setHasMore] = useState(false);
 
   const loadPage = useCallback(
-    (size: number) => {
-      void getConfirmedMessagesPage(conversationId, size).then((page) => {
+    (size: number) =>
+      getConfirmedMessagesPage(conversationId, size).then((page) => {
         setConfirmedMessages(page);
         setHasMore(page.length >= size);
-      });
-    },
+      }),
     [conversationId],
   );
 
   useEffect(() => {
-    loadPage(pageSize);
+    void loadPage(pageSize);
     // Only reload the initial page automatically on mount/conversation
     // change — loadMore/refresh below trigger their own reloads explicitly.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
-  const refresh = useCallback(() => {
-    loadPage(pageSize);
-  }, [loadPage, pageSize]);
+  const refresh = useCallback(() => loadPage(pageSize), [loadPage, pageSize]);
 
   const loadMore = useCallback(() => {
     if (!hasMore) {
@@ -49,7 +46,7 @@ export function useConfirmedMessages(conversationId: string): UseConfirmedMessag
 
     const nextPageSize = pageSize + PAGE_SIZE_STEP;
     setPageSize(nextPageSize);
-    loadPage(nextPageSize);
+    void loadPage(nextPageSize);
   }, [hasMore, loadPage, pageSize]);
 
   return { confirmedMessages, hasMore, loadMore, refresh };
