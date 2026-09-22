@@ -50,6 +50,10 @@ describe("useChatThread", () => {
 
   it("lets a failed message be retried and resolves it once the backend accepts it", async () => {
     let isBackendReachable = false;
+    // Confirmation is surfaced through listMessages(), same contract as the
+    // real mock backend — just without an artificial delay, since this test
+    // isn't exercising the Sent -> Confirmed timing.
+    const confirmedMessages: ServerMessage[] = [];
 
     const flakyBackend = {
       submitMessage(message: ClientMessage, senderId: string) {
@@ -66,9 +70,11 @@ describe("useChatThread", () => {
           createdAt: message.createdAt,
         };
 
+        confirmedMessages.push(serverMessage);
+
         return serverMessage;
       },
-      listMessages: () => [],
+      listMessages: () => confirmedMessages,
       receiveIncomingMessage: () => {
         throw new Error("not used in this test");
       },

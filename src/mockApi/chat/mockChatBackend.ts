@@ -58,9 +58,19 @@ export type MockChatBackend = {
 /** Shared across every backend instance so serverId stays unique regardless of conversationId. */
 let nextServerId = 1;
 
+/**
+ * How long the backend takes, after accepting a submission, to make it part
+ * of its canonical thread (i.e. what listMessages()/syncThread surface).
+ * This is what the client observes as the Sent → Confirmed (single check →
+ * double check) gap — short enough to not annoy manual testing, long enough
+ * to read clearly in a demo recording.
+ */
+export const DEFAULT_CONFIRMATION_DELAY_MS = 600;
+
 export function createMockChatBackend(
   dedupeByClientId: boolean = true,
   seedMessages: SeedMessage[] = [],
+  confirmationDelayMs: number = DEFAULT_CONFIRMATION_DELAY_MS,
 ): MockChatBackend {
   // seed.serverId must stay identical across reloads for INSERT OR IGNORE to dedupe it.
   const messages: ServerMessage[] = seedMessages.map((seed) => ({
@@ -92,7 +102,15 @@ export function createMockChatBackend(
 
       if (existing === undefined) {
         acceptedByClientId.set(message.clientId, serverMessage);
-        messages.push(serverMessage);
+
+        // Accepting the submission is immediate (the caller learns that via
+        // this function's return value), but joining the canonical thread —
+        // what listMessages() reports — happens only after this delay. The
+        // client only learns about it by polling/syncing, same as any other
+        // backend-side change.
+        setTimeout(() => {
+          messages.push(serverMessage);
+        }, confirmationDelayMs);
       }
 
       if (options?.dropResponse === true) {

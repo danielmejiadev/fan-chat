@@ -14,6 +14,7 @@ import {
 } from "@/features/chat/services/chatService";
 import {
   createMockChatBackend,
+  DEFAULT_CONFIRMATION_DELAY_MS,
   ResponseLostError,
   type MockChatBackend,
 } from "@/mockApi/chat/mockChatBackend";
@@ -50,13 +51,25 @@ const conversationId = "conversation-1";
 const senderId = "fan-1";
 
 beforeEach(() => {
+  jest.useFakeTimers();
   resetConversationBackends();
   setChatServiceStoreForTests(createInMemoryChatStore());
 });
 
 afterEach(() => {
   resetChatServiceStore();
+  jest.useRealTimers();
 });
+
+/**
+ * The mock backend confirms a submission asynchronously (see
+ * DEFAULT_CONFIRMATION_DELAY_MS in mockChatBackend.ts) — advancing fake
+ * timers past that delay is what makes the confirmed message actually show
+ * up in listMessages()/syncThread, without a real-time sleep in the test.
+ */
+async function advancePastBackendConfirmation(): Promise<void> {
+  await jest.advanceTimersByTimeAsync(DEFAULT_CONFIRMATION_DELAY_MS);
+}
 
 describe("chatService bug reproduction: lost response after retry", () => {
   it("documents the bug — a backend that does not dedupe by clientId creates two messages", async () => {
@@ -74,6 +87,7 @@ describe("chatService bug reproduction: lost response after retry", () => {
     // second message is created server-side.
     setConversationBackendForTests(conversationId, buggyBackend);
     await flushPendingMessages(conversationId, senderId);
+    await advancePastBackendConfirmation();
 
     // Reconnect sync pulls the backend's canonical thread, surfacing both.
     await syncThread(conversationId);
@@ -96,6 +110,7 @@ describe("chatService fix: idempotent retry after a lost response", () => {
 
     setConversationBackendForTests(conversationId, backend);
     await flushPendingMessages(conversationId, senderId);
+    await advancePastBackendConfirmation();
     await syncThread(conversationId);
 
     const thread = await getConfirmedThread(conversationId);
@@ -112,9 +127,34 @@ describe("chatService fix: idempotent retry after a lost response", () => {
     await flushPendingMessages(conversationId, senderId);
     await flushPendingMessages(conversationId, senderId);
     await flushPendingMessages(conversationId, senderId);
+    await advancePastBackendConfirmation();
     await syncThread(conversationId);
 
     expect(await getConfirmedThread(conversationId)).toHaveLength(1);
+  });
+});
+
+describe("chatService delivery ticks: Sent stays observable before Confirmed", () => {
+  it("keeps a message as Sent (single check) until the backend's delayed confirmation promotes it", async () => {
+    setConversationBackendForTests(conversationId, createMockChatBackend(true));
+
+    await enqueueMessage(conversationId, "hello");
+    await flushPendingMessages(conversationId, senderId);
+
+    // The backend accepted the submission (Sent), but hasn't yet surfaced it
+    // in its canonical thread — nothing to reconcile into "Confirmed" yet.
+    const pendingBeforeConfirmation = await getPendingMessages(conversationId);
+    expect(pendingBeforeConfirmation).toHaveLength(1);
+    expect(pendingBeforeConfirmation[0].status).toBe(MessageStatus.Sent);
+    expect(await getConfirmedThread(conversationId)).toHaveLength(0);
+
+    await advancePastBackendConfirmation();
+    await syncThread(conversationId);
+
+    expect(await getPendingMessages(conversationId)).toHaveLength(0);
+    const confirmedThread = await getConfirmedThread(conversationId);
+    expect(confirmedThread).toHaveLength(1);
+    expect(confirmedThread[0].text).toBe("hello");
   });
 });
 

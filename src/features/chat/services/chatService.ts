@@ -88,11 +88,18 @@ export async function enqueueMessage(conversationId: string, text: string): Prom
 }
 
 /**
- * Attempts to deliver every pending message for a conversation. A lost
- * response (ResponseLostError) leaves the message "failed" locally with its
- * text intact — a later retry reuses the same clientId, so a backend that
- * dedupes by clientId resolves it to a single message no matter how many
- * times this runs.
+ * Attempts to deliver every pending message for a conversation. Submitting
+ * only gets the message *accepted* (status → Sent, single check) — the
+ * backend itself surfaces the confirmed ServerMessage into its canonical
+ * thread asynchronously, after its own simulated delay (see
+ * mockChatBackend.ts). This function does not wait for that; the message is
+ * promoted to "Confirmed" (double check) later, by receiveMessages(), once
+ * syncThread()/polling observes it in the backend's thread.
+ *
+ * A lost response (ResponseLostError) leaves the message "failed" locally
+ * with its text intact — a later retry reuses the same clientId, so a
+ * backend that dedupes by clientId resolves it to a single message no
+ * matter how many times this runs.
  */
 export async function flushPendingMessages(
   conversationId: string,
@@ -115,8 +122,6 @@ export async function flushPendingMessages(
       });
 
       await chatStore.recordAcceptedClientId(pendingMessage.clientId, serverMessage.serverId);
-      await chatStore.insertMessage(serverMessage);
-      await chatStore.deletePendingMessage(pendingMessage.clientId);
     } catch (error) {
       const failureReason =
         error instanceof ContentRejectedError
@@ -135,13 +140,21 @@ export async function flushPendingMessages(
 /**
  * Reconciles incoming messages from the other participant (or from a
  * confirmed retry). insertMessage is keyed by serverId, so replaying the
- * same batch never duplicates the thread.
+ * same batch never duplicates the thread. A server message carrying a
+ * clientId is this device's own submission finally surfacing as confirmed —
+ * that's what promotes it from "Sent" (single check, still in the pending
+ * outbox) to "Confirmed" (double check, now only in the ServerMessage
+ * thread), so its pending row is removed here.
  */
 export async function receiveMessages(serverMessages: ServerMessage[]): Promise<void> {
   const chatStore = resolveStore();
 
   for (const serverMessage of serverMessages) {
     await chatStore.insertMessage(serverMessage);
+
+    if (serverMessage.clientId !== null) {
+      await chatStore.deletePendingMessage(serverMessage.clientId);
+    }
   }
 }
 
