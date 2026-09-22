@@ -84,7 +84,7 @@ export function GiftModal({
             "max-w-md": !isDesktop,
           })}
         >
-          <GiftModalHeader conversation={conversation} />
+          <GiftModalHeader conversation={conversation} onClose={onClose} />
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className={clsx({ "flex-row gap-8": isDesktop, "gap-6": !isDesktop })}>
