@@ -43,9 +43,19 @@ export type MockChatBackend = {
   /**
    * Simulates the other participant sending a message — there is no
    * clientId because it did not originate on this device. Only visible to a
-   * client after its next syncThread, same as any other backend-side change.
+   * client after its next syncThread, same as any other backend-side change,
+   * or immediately via subscribe() if the client is connected.
    */
   receiveIncomingMessage: (conversationId: string, senderId: string, text: string) => ServerMessage;
+  /**
+   * Registers a listener that fires whenever a message joins the canonical
+   * thread — this client's own delayed confirmation, or the other
+   * participant's incoming message. Mirrors a real socket channel: the
+   * notification carries no payload, so a listener re-pulls via
+   * listMessages()/syncThread, same as it would reconcile a socket "there's
+   * new data" frame. Returns an unsubscribe function.
+   */
+  subscribe: (listener: () => void) => () => void;
 };
 
 /**
@@ -94,6 +104,13 @@ export function createMockChatBackend(
     createdAt: seed.createdAt,
   }));
   const acceptedByClientId = new Map<string, ServerMessage>();
+  const listeners = new Set<() => void>();
+
+  const notifyListeners = (): void => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
 
   return {
     submitMessage(message, senderId, options) {
@@ -127,6 +144,7 @@ export function createMockChatBackend(
             // polling/syncing, same as any other backend-side change.
             setTimeout(() => {
               messages.push(serverMessage);
+              notifyListeners();
             }, confirmationDelayMs);
           }
 
@@ -155,8 +173,17 @@ export function createMockChatBackend(
       };
 
       messages.push(serverMessage);
+      notifyListeners();
 
       return serverMessage;
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }

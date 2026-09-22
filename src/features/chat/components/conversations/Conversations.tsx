@@ -16,7 +16,7 @@ export function Conversations({ conversationId }: ConversationsProps) {
 
   return (
     <View className="flex-1 bg-surface">
-      <ChatListHeader />
+      <ChatListHeader conversationId={conversationId} />
       <View className="flex-1 px-4 pt-4">
         <View className="mb-4">
           <ConversationSearch

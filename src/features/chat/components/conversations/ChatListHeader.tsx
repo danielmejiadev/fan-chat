@@ -5,7 +5,11 @@ import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
-export function ChatListHeader() {
+interface ChatListHeaderProps {
+  conversationId?: string;
+}
+
+export function ChatListHeader({ conversationId }: ChatListHeaderProps) {
   const isDesktop = useIsDesktopLayout();
 
   return (
@@ -15,7 +19,7 @@ export function ChatListHeader() {
         "py-3": !isDesktop,
       })}
     >
-      {!isDesktop && (
+      {!isDesktop && conversationId && (
         <View className="h-9 w-9 items-center justify-center">
           <Icon name="chevron-back" size={16} className="text-foreground-primary" />
         </View>
