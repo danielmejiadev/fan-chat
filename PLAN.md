@@ -307,12 +307,15 @@ para el historial del bug de SQLite en web.
   posterior (incluida la del singleton `getDatabase()` en
   `src/lib/database.ts`, que sigue igual). Confirmado que resuelve el
   error en el navegador.
-- **Pendiente de limpieza, no bloqueante**: `SQLiteProvider` abre
+- **Resuelto (limpieza)**: el `SQLiteProvider` original abría
   `"myapp.db"` (nombre de ejemplo de la doc de Expo) mientras
-  `getDatabase()` sigue abriendo `"fan-chat.db"` — son dos archivos de
-  DB distintos; `myapp.db` no se usa para nada más que forzar el
-  warm-up async. Funciona así, pero conviene alinear el nombre (o
-  documentar por qué son dos bases a propósito) antes de entregar.
+  `getDatabase()` seguía abriendo `"fan-chat.db"` — quedaban dos
+  archivos de DB distintos. Ya no aplica: `SQLiteProvider` fue
+  reemplazado por un hook `useAppReady` que hace el warm-up async contra
+  el mismo `"fan-chat.db"` de `src/lib/database.ts` (ver commit "Replace
+  dead SQLiteProvider with a useAppReady bootstrap hook"), así que ya no
+  hay dos bases distintas — verificado: `grep -n "myapp.db\|fan-chat.db\|databaseName"
+  src/app/_layout.tsx src/lib/database.ts` solo muestra `fan-chat.db`.
 
 ## Reglas de identidad y git (siempre aplican)
 
