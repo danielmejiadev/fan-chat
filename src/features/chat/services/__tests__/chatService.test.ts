@@ -15,6 +15,7 @@ import {
 import {
   createMockChatBackend,
   DEFAULT_CONFIRMATION_DELAY_MS,
+  DEFAULT_SUBMIT_DELAY_MS,
   ResponseLostError,
   type MockChatBackend,
 } from "@/mockApi/chat/mockChatBackend";
@@ -35,10 +36,10 @@ function createResponseDroppingBackend(
 
   return {
     ...backend,
-    submitMessage(message, senderId, options) {
+    async submitMessage(message, senderId, options) {
       if (pending.has(message.clientId)) {
         pending.delete(message.clientId);
-        backend.submitMessage(message, senderId);
+        await backend.submitMessage(message, senderId);
         throw new ResponseLostError();
       }
 
@@ -71,6 +72,18 @@ async function advancePastBackendConfirmation(): Promise<void> {
   await jest.advanceTimersByTimeAsync(DEFAULT_CONFIRMATION_DELAY_MS);
 }
 
+/**
+ * flushPendingMessages() now awaits the backend's submission delay (see
+ * DEFAULT_SUBMIT_DELAY_MS in mockChatBackend.ts) before it resolves — under
+ * fake timers that await never settles on its own, so this starts the flush
+ * and advances timers past the submit delay concurrently.
+ */
+async function flushPastSubmitDelay(conversationId: string, senderId: string): Promise<void> {
+  const flushPromise = flushPendingMessages(conversationId, senderId);
+  await jest.advanceTimersByTimeAsync(DEFAULT_SUBMIT_DELAY_MS);
+  await flushPromise;
+}
+
 describe("chatService bug reproduction: lost response after retry", () => {
   it("documents the bug — a backend that does not dedupe by clientId creates two messages", async () => {
     const buggyBackend = createMockChatBackend(false);
@@ -80,13 +93,13 @@ describe("chatService bug reproduction: lost response after retry", () => {
     // First attempt: backend accepts and stores it, but the response is lost.
     const droppingOnce = createResponseDroppingBackend(buggyBackend, [message.clientId]);
     setConversationBackendForTests(conversationId, droppingOnce);
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
     expect((await getPendingMessages(conversationId))[0].status).toBe(MessageStatus.Failed);
 
     // Retry: same clientId, but the buggy backend has no memory of it — a
     // second message is created server-side.
     setConversationBackendForTests(conversationId, buggyBackend);
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
     await advancePastBackendConfirmation();
 
     // Reconnect sync pulls the backend's canonical thread, surfacing both.
@@ -104,12 +117,12 @@ describe("chatService fix: idempotent retry after a lost response", () => {
 
     const droppingOnce = createResponseDroppingBackend(backend, [message.clientId]);
     setConversationBackendForTests(conversationId, droppingOnce);
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
     expect((await getPendingMessages(conversationId))[0].status).toBe(MessageStatus.Failed);
     expect(await getConfirmedThread(conversationId)).toHaveLength(0);
 
     setConversationBackendForTests(conversationId, backend);
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
     await advancePastBackendConfirmation();
     await syncThread(conversationId);
 
@@ -124,13 +137,37 @@ describe("chatService fix: idempotent retry after a lost response", () => {
 
     await enqueueMessage(conversationId, "hello");
 
-    await flushPendingMessages(conversationId, senderId);
-    await flushPendingMessages(conversationId, senderId);
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
     await advancePastBackendConfirmation();
     await syncThread(conversationId);
 
     expect(await getConfirmedThread(conversationId)).toHaveLength(1);
+  });
+});
+
+describe("chatService delivery ticks: Pending stays observable before Sent is confirmed accepted", () => {
+  it("does not resolve flushPendingMessages until the backend's submit delay elapses", async () => {
+    setConversationBackendForTests(conversationId, createMockChatBackend(true));
+
+    await enqueueMessage(conversationId, "hello");
+
+    let hasFlushResolved = false;
+    const flushPromise = flushPendingMessages(conversationId, senderId).then(() => {
+      hasFlushResolved = true;
+    });
+
+    // The caller (useChatConnection's forceSync) only notifies the UI to
+    // re-render with the Sent status after flushPendingMessages resolves —
+    // this delay is what keeps the client's optimistic Pending bubble on
+    // screen for a beat instead of flipping to Sent virtually instantly.
+    await jest.advanceTimersByTimeAsync(DEFAULT_SUBMIT_DELAY_MS - 1);
+    expect(hasFlushResolved).toBe(false);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await flushPromise;
+    expect(hasFlushResolved).toBe(true);
   });
 });
 
@@ -139,7 +176,7 @@ describe("chatService delivery ticks: Sent stays observable before Confirmed", (
     setConversationBackendForTests(conversationId, createMockChatBackend(true));
 
     await enqueueMessage(conversationId, "hello");
-    await flushPendingMessages(conversationId, senderId);
+    await flushPastSubmitDelay(conversationId, senderId);
 
     // The backend accepted the submission (Sent), but hasn't yet surfaced it
     // in its canonical thread — nothing to reconcile into "Confirmed" yet.
@@ -219,7 +256,7 @@ describe("chatService incoming message reconciliation", () => {
 describe("chatService failure handling", () => {
   it("preserves the text and marks the message failed when the backend rejects it", async () => {
     const unreachableBackend: MockChatBackend = {
-      submitMessage() {
+      async submitMessage() {
         throw new Error("network unreachable");
       },
       listMessages() {

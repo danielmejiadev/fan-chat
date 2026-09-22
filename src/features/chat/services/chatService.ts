@@ -116,7 +116,7 @@ export async function flushPendingMessages(
     await chatStore.updatePendingMessageStatus(pendingMessage.clientId, MessageStatus.Sent);
 
     try {
-      const serverMessage = backend.submitMessage(pendingMessage, senderId, {
+      const serverMessage = await backend.submitMessage(pendingMessage, senderId, {
         dropResponse: shouldDropNextResponse && index === 0,
         rejectContent: shouldRejectNextMessage && index === 0,
       });

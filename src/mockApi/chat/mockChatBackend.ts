@@ -32,7 +32,7 @@ export type MockChatBackend = {
     message: ClientMessage,
     senderId: string,
     options?: { dropResponse?: boolean; rejectContent?: boolean },
-  ) => ServerMessage;
+  ) => Promise<ServerMessage>;
   /**
    * The backend's canonical thread. A client only sees its own submissions
    * through submitMessage's return value — if that response was lost, the
@@ -67,10 +67,22 @@ let nextServerId = 1;
  */
 export const DEFAULT_CONFIRMATION_DELAY_MS = 600;
 
+/**
+ * How long the backend takes to accept/reject a submission in the first
+ * place. This is what the client observes as the Pending → Sent (clock →
+ * single check) gap — short enough that sending several messages in a row
+ * doesn't feel sluggish, but long enough for the clock icon to read clearly
+ * for a beat. Kept well under DEFAULT_CONFIRMATION_DELAY_MS so the three
+ * delivery states (clock, single check, double check) stay visually
+ * distinguishable in sequence.
+ */
+export const DEFAULT_SUBMIT_DELAY_MS = 300;
+
 export function createMockChatBackend(
   dedupeByClientId: boolean = true,
   seedMessages: SeedMessage[] = [],
   confirmationDelayMs: number = DEFAULT_CONFIRMATION_DELAY_MS,
+  submitDelayMs: number = DEFAULT_SUBMIT_DELAY_MS,
 ): MockChatBackend {
   // seed.serverId must stay identical across reloads for INSERT OR IGNORE to dedupe it.
   const messages: ServerMessage[] = seedMessages.map((seed) => ({
@@ -85,39 +97,47 @@ export function createMockChatBackend(
 
   return {
     submitMessage(message, senderId, options) {
-      if (options?.rejectContent === true) {
-        throw new ContentRejectedError();
-      }
-
-      const existing = dedupeByClientId ? acceptedByClientId.get(message.clientId) : undefined;
-
-      const serverMessage: ServerMessage = existing ?? {
-        serverId: `srv_${nextServerId++}`,
-        clientId: message.clientId,
-        conversationId: message.conversationId,
-        senderId,
-        text: message.text,
-        createdAt: message.createdAt,
-      };
-
-      if (existing === undefined) {
-        acceptedByClientId.set(message.clientId, serverMessage);
-
-        // Accepting the submission is immediate (the caller learns that via
-        // this function's return value), but joining the canonical thread —
-        // what listMessages() reports — happens only after this delay. The
-        // client only learns about it by polling/syncing, same as any other
-        // backend-side change.
+      // Simulates the network round-trip for the submission itself — the
+      // client only observes the message flip from Pending to Sent once this
+      // resolves, separate from and shorter than the confirmation delay.
+      return new Promise<ServerMessage>((resolve, reject) => {
         setTimeout(() => {
-          messages.push(serverMessage);
-        }, confirmationDelayMs);
-      }
+          if (options?.rejectContent === true) {
+            reject(new ContentRejectedError());
+            return;
+          }
 
-      if (options?.dropResponse === true) {
-        throw new ResponseLostError();
-      }
+          const existing = dedupeByClientId ? acceptedByClientId.get(message.clientId) : undefined;
 
-      return serverMessage;
+          const serverMessage: ServerMessage = existing ?? {
+            serverId: `srv_${nextServerId++}`,
+            clientId: message.clientId,
+            conversationId: message.conversationId,
+            senderId,
+            text: message.text,
+            createdAt: message.createdAt,
+          };
+
+          if (existing === undefined) {
+            acceptedByClientId.set(message.clientId, serverMessage);
+
+            // Accepting the submission happens above, but joining the
+            // canonical thread — what listMessages() reports — happens only
+            // after this further delay. The client only learns about it by
+            // polling/syncing, same as any other backend-side change.
+            setTimeout(() => {
+              messages.push(serverMessage);
+            }, confirmationDelayMs);
+          }
+
+          if (options?.dropResponse === true) {
+            reject(new ResponseLostError());
+            return;
+          }
+
+          resolve(serverMessage);
+        }, submitDelayMs);
+      });
     },
 
     listMessages(conversationId) {

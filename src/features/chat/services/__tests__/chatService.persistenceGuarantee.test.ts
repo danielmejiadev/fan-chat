@@ -80,7 +80,7 @@ describe("chatService persistence guarantee (precondition for force-quit recover
     const realBackend = createMockChatBackend();
     const spiedBackend = {
       ...realBackend,
-      submitMessage(message: ClientMessage, submitterId: string) {
+      async submitMessage(message: ClientMessage, submitterId: string) {
         callOrder.push("backend:submitMessage");
         return realBackend.submitMessage(message, submitterId);
       },

@@ -39,9 +39,15 @@ describe("useChatThread", () => {
     });
     expect(result.current.messages[0].message.text).toBe("hello there");
 
-    await waitFor(() => {
-      expect(result.current.messages[0].origin).toBe("server");
-    });
+    // The real-time submit + confirmation + follow-up-poll delays now stack
+    // up past waitFor's default 1000ms timeout (see DEFAULT_SUBMIT_DELAY_MS
+    // and DEFAULT_CONFIRMATION_DELAY_MS in mockChatBackend.ts).
+    await waitFor(
+      () => {
+        expect(result.current.messages[0].origin).toBe("server");
+      },
+      { timeout: 3000 },
+    );
 
     // Without this, the hook's pending reconcile timers keep firing after
     // the test ends and can hit a reset store in a later test.
@@ -56,7 +62,7 @@ describe("useChatThread", () => {
     const confirmedMessages: ServerMessage[] = [];
 
     const flakyBackend = {
-      submitMessage(message: ClientMessage, senderId: string) {
+      async submitMessage(message: ClientMessage, senderId: string) {
         if (!isBackendReachable) {
           throw new Error("network unreachable");
         }
