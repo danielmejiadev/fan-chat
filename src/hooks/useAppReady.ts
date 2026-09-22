@@ -1,8 +1,8 @@
-import { useCallback, useEffect } from "react";
-import { useMigrations } from "drizzle-orm/expo-sqlite/migrator";
+import { useCallback, useEffect, useState } from "react";
+import { migrate } from "drizzle-orm/expo-sqlite/migrator";
 import * as SplashScreen from "expo-splash-screen";
 
-import { getAppDatabase } from "@/lib/database";
+import { initializeAppDatabase } from "@/lib/database";
 import { useAppFonts } from "@/hooks/useAppFonts";
 import migrations from "../../drizzle/app/migrations";
 
@@ -20,10 +20,29 @@ export type UseAppReadyResult = {
  */
 export function useAppReady(): UseAppReadyResult {
   const fontsLoaded = useAppFonts();
-  const { success: migrationsSucceeded, error: migrationsError } = useMigrations(
-    getAppDatabase(),
-    migrations,
-  );
+  const [migrationsSucceeded, setMigrationsSucceeded] = useState(false);
+  const [migrationsError, setMigrationsError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    initializeAppDatabase()
+      .then((appDatabase) => migrate(appDatabase, migrations))
+      .then(() => {
+        if (!isCancelled) {
+          setMigrationsSucceeded(true);
+        }
+      })
+      .catch((error: Error) => {
+        if (!isCancelled) {
+          setMigrationsError(error);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (migrationsError) {
