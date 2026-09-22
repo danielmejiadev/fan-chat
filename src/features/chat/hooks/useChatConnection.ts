@@ -1,37 +1,24 @@
-import { useCallback, useEffect, useRef } from "react";
-import { AppState, type AppStateStatus } from "react-native";
+import { useEffect } from "react";
 
 import { mockChatConnection } from "@/mockApi/chat/mockChatConnection";
 
-export type UseChatConnectionResult = {
-  forceSync: () => void;
-};
-
-/** Opens the connection on mount, closes it on unmount, and forces a sync when the app returns to the foreground. */
+/**
+ * Opens the connection on mount, closes it on unmount. The connection is
+ * fully event-driven and self-contained (see mockChatConnection.ts) — it
+ * owns its own backend subscription, NetInfo reconnect listener, and
+ * AppState foreground listener, and calls onChange whenever there's
+ * something new worth reading. This hook has nothing else to expose.
+ */
 export function useChatConnection(
   conversationId: string,
   senderId: string,
   onChange: () => void,
-): UseChatConnectionResult {
-  const forceSyncRef = useRef<() => void>(() => {});
-
+): void {
   useEffect(() => {
     const connection = mockChatConnection.connect(conversationId, senderId, onChange);
-    forceSyncRef.current = connection.forceSync;
-
-    const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-      if (nextAppState === "active") {
-        connection.forceSync();
-      }
-    });
 
     return () => {
       connection.disconnect();
-      subscription.remove();
     };
   }, [conversationId, senderId, onChange]);
-
-  return {
-    forceSync: useCallback(() => forceSyncRef.current(), []),
-  };
 }
