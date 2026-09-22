@@ -1,4 +1,13 @@
-import { enqueueMessage, flushPendingMessages } from "@/features/chat/services/chatService";
+import {
+  resetConversationBackends,
+  setConversationBackendForTests,
+} from "@/features/chat/services/chatBackendRegistry";
+import {
+  enqueueMessage,
+  flushPendingMessages,
+  resetChatServiceStore,
+  setChatServiceStoreForTests,
+} from "@/features/chat/services/chatService";
 import { createMockChatBackend } from "@/features/chat/services/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
@@ -47,19 +56,27 @@ function createCallOrderSpyStore(callOrder: string[]): ChatStore {
 const conversationId = "conversation-1";
 const senderId = "fan-1";
 
+beforeEach(() => {
+  resetConversationBackends();
+});
+
+afterEach(() => {
+  resetChatServiceStore();
+});
+
 describe("chatService persistence guarantee (precondition for force-quit recovery)", () => {
   it("writes to the store synchronously before enqueueMessage returns, with no network involved", () => {
     const callOrder: string[] = [];
-    const store = createCallOrderSpyStore(callOrder);
+    setChatServiceStoreForTests(createCallOrderSpyStore(callOrder));
 
-    enqueueMessage(conversationId, "hello", store);
+    enqueueMessage(conversationId, "hello");
 
     expect(callOrder).toEqual(["store:insertPendingMessage"]);
   });
 
   it("never calls the network before the pending message is already persisted", () => {
     const callOrder: string[] = [];
-    const store = createCallOrderSpyStore(callOrder);
+    setChatServiceStoreForTests(createCallOrderSpyStore(callOrder));
     const realBackend = createMockChatBackend();
     const spiedBackend = {
       ...realBackend,
@@ -68,9 +85,10 @@ describe("chatService persistence guarantee (precondition for force-quit recover
         return realBackend.submitMessage(message, submitterId);
       },
     };
+    setConversationBackendForTests(conversationId, spiedBackend);
 
-    enqueueMessage(conversationId, "hello", store);
-    flushPendingMessages(spiedBackend, conversationId, senderId, store);
+    enqueueMessage(conversationId, "hello");
+    flushPendingMessages(conversationId, senderId);
 
     const persistIndex = callOrder.indexOf("store:insertPendingMessage");
     const networkIndex = callOrder.indexOf("backend:submitMessage");

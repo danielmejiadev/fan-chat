@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 
-import { getConversationBackend } from "@/features/chat/services/chatBackendRegistry";
 import {
   enqueueMessage,
   flushPendingMessages,
@@ -9,8 +8,6 @@ import {
   getThreadWindow,
   syncThread,
 } from "@/features/chat/services/chatService";
-import type { MockChatBackend } from "@/features/chat/services/mockChatBackend";
-import type { ChatStore } from "@/features/chat/storage/chatStore";
 import { MessageStatus, type ThreadMessage } from "@/features/chat/types";
 import { mergeThreadMessages } from "@/features/chat/utils/mergeThreadMessages";
 
@@ -36,33 +33,23 @@ export type UseChatThreadResult = {
  * remote fetch to cache, everything chatService does is synchronous local
  * storage plus a mock backend call.
  *
- * `store` and `backend` are optional overrides, mirroring chatService's own
- * DI pattern: production code omits them and falls back to the SQLite
- * singleton plus the per-conversation mock backend, while tests pass an
- * in-memory ChatStore (so this hook can be exercised in Jest without
- * touching the native expo-sqlite binary) and, when needed, a backend
- * stubbed to fail so failure/retry states can be driven directly.
+ * chatService resolves the store and the conversation's backend on its own —
+ * tests swap those out via chatService's/chatBackendRegistry's test-only
+ * setters instead of this hook taking DI params it would never receive in
+ * production.
  */
-export function useChatThread(
-  conversationId: string,
-  senderId: string,
-  store?: ChatStore,
-  backendOverride?: MockChatBackend,
-): UseChatThreadResult {
-  const registryBackend = useMemo(() => getConversationBackend(conversationId), [conversationId]);
-  const backend = backendOverride ?? registryBackend;
-
+export function useChatThread(conversationId: string, senderId: string): UseChatThreadResult {
   const [windowSize, setWindowSize] = useState(INITIAL_WINDOW_SIZE);
 
   const readConfirmedWindow = useCallback(
-    (size: number) => getThreadWindow(conversationId, size, store),
-    [conversationId, store],
+    (size: number) => getThreadWindow(conversationId, size),
+    [conversationId],
   );
 
   const readMessages = useCallback(
     (size: number) =>
-      mergeThreadMessages(readConfirmedWindow(size), getPendingMessages(conversationId, store)),
-    [readConfirmedWindow, conversationId, store],
+      mergeThreadMessages(readConfirmedWindow(size), getPendingMessages(conversationId)),
+    [readConfirmedWindow, conversationId],
   );
 
   const [messages, setMessages] = useState<ThreadMessage[]>(() => readMessages(windowSize));
@@ -73,37 +60,32 @@ export function useChatThread(
     () => readConfirmedWindow(windowSize).length >= windowSize,
   );
 
-  // Re-reads when conversationId (a new thread), windowSize (loadOlderMessages),
-  // or store changes — React's documented "adjusting state during render"
-  // pattern for deriving state from changed props/state, not a setState-in-effect.
+  // Re-reads when conversationId (a new thread) or windowSize
+  // (loadOlderMessages) changes — React's documented "adjusting state during
+  // render" pattern for deriving state from changed props/state, not a
+  // setState-in-effect.
   const [renderedConversationId, setRenderedConversationId] = useState(conversationId);
   const [renderedWindowSize, setRenderedWindowSize] = useState(windowSize);
-  const [renderedStore, setRenderedStore] = useState(store);
-  if (
-    renderedConversationId !== conversationId ||
-    renderedWindowSize !== windowSize ||
-    renderedStore !== store
-  ) {
+  if (renderedConversationId !== conversationId || renderedWindowSize !== windowSize) {
     const conversationChanged = renderedConversationId !== conversationId;
     const effectiveWindowSize = conversationChanged ? INITIAL_WINDOW_SIZE : windowSize;
 
     setRenderedConversationId(conversationId);
     setRenderedWindowSize(effectiveWindowSize);
-    setRenderedStore(store);
     if (conversationChanged && windowSize !== INITIAL_WINDOW_SIZE) {
       setWindowSize(INITIAL_WINDOW_SIZE);
     }
 
     const confirmedWindow = readConfirmedWindow(effectiveWindowSize);
-    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId, store)));
+    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId)));
     setHasMoreOlderMessages(confirmedWindow.length >= effectiveWindowSize);
   }
 
   const refreshMessages = useCallback(() => {
     const confirmedWindow = readConfirmedWindow(windowSize);
-    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId, store)));
+    setMessages(mergeThreadMessages(confirmedWindow, getPendingMessages(conversationId)));
     setHasMoreOlderMessages(confirmedWindow.length >= windowSize);
-  }, [readConfirmedWindow, conversationId, store, windowSize]);
+  }, [readConfirmedWindow, conversationId, windowSize]);
 
   const loadOlderMessages = useCallback(() => {
     if (!hasMoreOlderMessages) {
@@ -113,18 +95,22 @@ export function useChatThread(
   }, [hasMoreOlderMessages]);
 
   const reconcile = useCallback(() => {
-    flushPendingMessages(backend, conversationId, senderId, store);
-    syncThread(backend, conversationId, store);
+    flushPendingMessages(conversationId, senderId);
+    syncThread(conversationId);
     refreshMessages();
-  }, [backend, conversationId, senderId, store, refreshMessages]);
+  }, [conversationId, senderId, refreshMessages]);
 
-  // Periodic reconciliation stands in for a push/socket connection the mock
-  // backend doesn't have; foreground reconciliation covers the "reconnect
-  // after coming back from background" case explicitly.
+  // Reconciles immediately (the initial fetch a real app does on opening a
+  // thread, before anything is cached locally) and then periodically, which
+  // stands in for a push/socket connection the mock backend doesn't have;
+  // foreground reconciliation covers the "reconnect after coming back from
+  // background" case explicitly.
   useEffect(() => {
+    const timeoutId = setTimeout(reconcile, 0);
     const intervalId = setInterval(reconcile, RECONCILE_INTERVAL_MS);
 
     return () => {
+      clearTimeout(timeoutId);
       clearInterval(intervalId);
     };
   }, [reconcile]);
@@ -143,16 +129,16 @@ export function useChatThread(
 
   const sendMessage = useCallback(
     (text: string) => {
-      enqueueMessage(conversationId, text, store);
+      enqueueMessage(conversationId, text);
       refreshMessages();
       reconcile();
     },
-    [conversationId, store, refreshMessages, reconcile],
+    [conversationId, refreshMessages, reconcile],
   );
 
   const retryMessage = useCallback(
     (clientId: string) => {
-      const failedMessage = getPendingMessages(conversationId, store).find(
+      const failedMessage = getPendingMessages(conversationId).find(
         (pendingMessage) =>
           pendingMessage.clientId === clientId && pendingMessage.status === MessageStatus.Failed,
       );
@@ -163,7 +149,7 @@ export function useChatThread(
 
       reconcile();
     },
-    [conversationId, store, reconcile],
+    [conversationId, reconcile],
   );
 
   // There is no real network layer to observe here (the backend is a local

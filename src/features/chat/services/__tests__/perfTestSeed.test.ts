@@ -1,4 +1,8 @@
-import { ensurePerfTestMessagesSeeded } from "@/features/chat/services/perfTestSeed";
+import {
+  ensurePerfTestMessagesSeeded,
+  resetPerfTestSeedStore,
+  setPerfTestSeedStoreForTests,
+} from "@/features/chat/services/perfTestSeed";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import {
   generatePerfTestMessages,
@@ -32,20 +36,26 @@ describe("generatePerfTestMessages", () => {
 });
 
 describe("ensurePerfTestMessagesSeeded", () => {
+  afterEach(() => {
+    resetPerfTestSeedStore();
+  });
+
   it("seeds the full dataset when the conversation is empty", () => {
     const store = createInMemoryChatStore();
+    setPerfTestSeedStoreForTests(store);
 
-    ensurePerfTestMessagesSeeded(store);
+    ensurePerfTestMessagesSeeded();
 
     expect(store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);
   });
 
   it("does not reseed when the dataset is already present", () => {
     const store = createInMemoryChatStore();
+    setPerfTestSeedStoreForTests(store);
     const insertMessagesSpy = jest.spyOn(store, "insertMessages");
 
-    ensurePerfTestMessagesSeeded(store);
-    ensurePerfTestMessagesSeeded(store);
+    ensurePerfTestMessagesSeeded();
+    ensurePerfTestMessagesSeeded();
 
     expect(insertMessagesSpy).toHaveBeenCalledTimes(1);
     expect(store.countMessages(PERF_TEST_CONVERSATION_ID)).toBe(PERF_TEST_MESSAGE_COUNT);

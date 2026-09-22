@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -9,7 +9,6 @@ import { MessagesList } from "@/features/chat/components/chatDetail/MessagesList
 import { OfflineBanner } from "@/features/chat/components/chatDetail/OfflineBanner";
 import { CURRENT_FAN_ID, getConversationById } from "@/features/chat/constants/mockConversations";
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
-import { ensureDemoConversationSeeded } from "@/features/chat/services/demoConversationSeed";
 import { GiftModal } from "@/features/purchases/components/GiftModal";
 
 interface ThreadPaneProps {
@@ -19,10 +18,6 @@ interface ThreadPaneProps {
 export function ThreadPane({ conversationId }: ThreadPaneProps) {
   const conversation = getConversationById(conversationId);
   const [isGiftOpen, setIsGiftOpen] = useState(false);
-
-  useEffect(() => {
-    ensureDemoConversationSeeded(conversationId);
-  }, [conversationId]);
 
   const { messages, sendMessage, retryMessage, loadOlderMessages, isOffline } = useChatThread(
     conversationId,

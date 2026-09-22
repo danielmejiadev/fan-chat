@@ -1,3 +1,4 @@
+import { getPurchaseBackend } from "@/features/purchases/services/purchaseBackendRegistry";
 import { createSqlitePurchaseStore } from "@/features/purchases/storage/purchasesDatabase";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
 import {
@@ -6,24 +7,27 @@ import {
   type PurchaseConfirmation,
   type StorePurchase,
 } from "@/features/purchases/types";
-import type {
-  MockPurchaseBackend,
-  PurchaseAttemptOutcome,
-} from "@/features/purchases/services/mockPurchaseBackend";
+import type { PurchaseAttemptOutcome } from "@/features/purchases/services/mockPurchaseBackend";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: PurchaseStore | null = null;
 
-function resolveStore(store?: PurchaseStore): PurchaseStore {
-  if (store !== undefined) {
-    return store;
-  }
-
+function resolveStore(): PurchaseStore {
   if (defaultStore === null) {
     defaultStore = createSqlitePurchaseStore();
   }
 
   return defaultStore;
+}
+
+/** Test-only: forces the next resolveStore() call to use this store instead of SQLite. */
+export function setPurchaseServiceStoreForTests(store: PurchaseStore): void {
+  defaultStore = store;
+}
+
+/** Test-only: clears the cached store so each test starts from a fresh one. */
+export function resetPurchaseServiceStore(): void {
+  defaultStore = null;
 }
 
 /**
@@ -35,9 +39,8 @@ export function initiatePurchase(
   productId: string,
   priceCents: number,
   currency: string,
-  store?: PurchaseStore,
 ): StorePurchase {
-  const purchaseStore = resolveStore(store);
+  const purchaseStore = resolveStore();
   const existingPendingPurchase = purchaseStore
     .getPurchasesForProduct(productId)
     .find((purchase) => purchase.status === StorePurchaseStatus.Pending);
@@ -67,14 +70,12 @@ export function initiatePurchase(
  */
 export function processPurchase(
   purchase: StorePurchase,
-  backend: MockPurchaseBackend,
   userId: string,
   options?: { outcome?: PurchaseAttemptOutcome },
-  store?: PurchaseStore,
 ): StorePurchase {
-  const resolvedPurchase = backend.purchase(purchase, userId, options);
+  const resolvedPurchase = getPurchaseBackend().purchase(purchase, userId, options);
 
-  resolveStore(store).updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
+  resolveStore().updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
 
   return resolvedPurchase;
 }
@@ -85,14 +86,10 @@ export function processPurchase(
  * access. Upserted by purchaseId, so a duplicate confirmation event (e.g. a
  * repeated webhook) never grants access twice.
  */
-export function confirmPurchase(
-  purchaseId: string,
-  backend: MockPurchaseBackend,
-  store?: PurchaseStore,
-): PurchaseConfirmation {
-  const confirmation = backend.confirmEntitlement(purchaseId);
+export function confirmPurchase(purchaseId: string): PurchaseConfirmation {
+  const confirmation = getPurchaseBackend().confirmEntitlement(purchaseId);
 
-  resolveStore(store).upsertConfirmation(confirmation);
+  resolveStore().upsertConfirmation(confirmation);
 
   return confirmation;
 }
@@ -103,13 +100,9 @@ export function confirmPurchase(
  * confirmation are upserted by their primary key, so restoring the same
  * purchase twice has no further effect.
  */
-export function restorePurchases(
-  userId: string,
-  backend: MockPurchaseBackend,
-  store?: PurchaseStore,
-): StorePurchase[] {
-  const purchaseStore = resolveStore(store);
-  const restoredPurchases = backend.restorePurchases(userId);
+export function restorePurchases(userId: string): StorePurchase[] {
+  const purchaseStore = resolveStore();
+  const restoredPurchases = getPurchaseBackend().restorePurchases(userId);
 
   for (const restoredPurchase of restoredPurchases) {
     purchaseStore.insertPurchase(restoredPurchase);
@@ -130,8 +123,8 @@ export function restorePurchases(
  * demotes it. A succeeded purchase with no confirmation yet reads as
  * Pending, never Active — that is the honest "delayed confirmation" state.
  */
-export function getEntitlementStatus(productId: string, store?: PurchaseStore): EntitlementStatus {
-  const purchaseStore = resolveStore(store);
+export function getEntitlementStatus(productId: string): EntitlementStatus {
+  const purchaseStore = resolveStore();
   const purchasesForProduct = purchaseStore.getPurchasesForProduct(productId);
 
   const confirmations = purchasesForProduct

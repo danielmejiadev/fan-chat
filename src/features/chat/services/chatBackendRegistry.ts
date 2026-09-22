@@ -1,3 +1,4 @@
+import { getSeedMessagesForConversation } from "@/features/chat/constants/mockMessages";
 import {
   createMockChatBackend,
   type MockChatBackend,
@@ -17,7 +18,7 @@ export function getConversationBackend(conversationId: string): MockChatBackend 
   let backend = backendsByConversationId.get(conversationId);
 
   if (backend === undefined) {
-    backend = createMockChatBackend();
+    backend = createMockChatBackend(true, getSeedMessagesForConversation(conversationId));
     backendsByConversationId.set(conversationId, backend);
   }
 
@@ -27,4 +28,12 @@ export function getConversationBackend(conversationId: string): MockChatBackend 
 /** Test-only: clears the registry so conversationId reuse across tests doesn't leak backend state. */
 export function resetConversationBackends(): void {
   backendsByConversationId.clear();
+}
+
+/** Test-only: forces a conversationId to resolve to a specific (e.g. failure-simulating) backend. */
+export function setConversationBackendForTests(
+  conversationId: string,
+  backend: MockChatBackend,
+): void {
+  backendsByConversationId.set(conversationId, backend);
 }

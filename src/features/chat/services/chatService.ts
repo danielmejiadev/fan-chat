@@ -1,16 +1,12 @@
+import { getConversationBackend } from "@/features/chat/services/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
 import { MessageStatus, type ClientMessage, type ServerMessage } from "@/features/chat/types";
-import type { MockChatBackend } from "@/features/chat/services/mockChatBackend";
 import { generateUuid } from "@/utils/generateUuid";
 
 let defaultStore: ChatStore | null = null;
 
-function resolveStore(store?: ChatStore): ChatStore {
-  if (store !== undefined) {
-    return store;
-  }
-
+function resolveStore(): ChatStore {
   if (defaultStore === null) {
     defaultStore = createSqliteChatStore();
   }
@@ -18,15 +14,21 @@ function resolveStore(store?: ChatStore): ChatStore {
   return defaultStore;
 }
 
+/** Test-only: forces the next resolveStore() call to use this store instead of SQLite. */
+export function setChatServiceStoreForTests(store: ChatStore): void {
+  defaultStore = store;
+}
+
+/** Test-only: clears the cached store so each test starts from a fresh one. */
+export function resetChatServiceStore(): void {
+  defaultStore = null;
+}
+
 /**
  * Writes the message to the local outbox before any network attempt, so it
  * survives a force-quit while still "pending".
  */
-export function enqueueMessage(
-  conversationId: string,
-  text: string,
-  store?: ChatStore,
-): ClientMessage {
+export function enqueueMessage(conversationId: string, text: string): ClientMessage {
   const message: ClientMessage = {
     clientId: generateUuid(),
     conversationId,
@@ -35,7 +37,7 @@ export function enqueueMessage(
     status: MessageStatus.Pending,
   };
 
-  resolveStore(store).insertPendingMessage(message);
+  resolveStore().insertPendingMessage(message);
 
   return message;
 }
@@ -47,13 +49,9 @@ export function enqueueMessage(
  * dedupes by clientId resolves it to a single message no matter how many
  * times this runs.
  */
-export function flushPendingMessages(
-  backend: MockChatBackend,
-  conversationId: string,
-  senderId: string,
-  store?: ChatStore,
-): void {
-  const chatStore = resolveStore(store);
+export function flushPendingMessages(conversationId: string, senderId: string): void {
+  const chatStore = resolveStore();
+  const backend = getConversationBackend(conversationId);
   const pendingMessages = chatStore.getPendingMessages(conversationId);
 
   for (const pendingMessage of pendingMessages) {
@@ -76,8 +74,8 @@ export function flushPendingMessages(
  * confirmed retry). insertMessage is keyed by serverId, so replaying the
  * same batch never duplicates the thread.
  */
-export function receiveMessages(serverMessages: ServerMessage[], store?: ChatStore): void {
-  const chatStore = resolveStore(store);
+export function receiveMessages(serverMessages: ServerMessage[]): void {
+  const chatStore = resolveStore();
 
   for (const serverMessage of serverMessages) {
     chatStore.insertMessage(serverMessage);
@@ -90,16 +88,14 @@ export function receiveMessages(serverMessages: ServerMessage[], store?: ChatSto
  * submitMessage's return value, so this is what surfaces messages the
  * backend accepted while the client was offline or a response was lost.
  */
-export function syncThread(
-  backend: MockChatBackend,
-  conversationId: string,
-  store?: ChatStore,
-): void {
-  receiveMessages(backend.listMessages(conversationId), store);
+export function syncThread(conversationId: string): void {
+  const backend = getConversationBackend(conversationId);
+
+  receiveMessages(backend.listMessages(conversationId));
 }
 
-export function getConfirmedThread(conversationId: string, store?: ChatStore): ServerMessage[] {
-  return resolveStore(store).getThreadMessages(conversationId);
+export function getConfirmedThread(conversationId: string): ServerMessage[] {
+  return resolveStore().getThreadMessages(conversationId);
 }
 
 /**
@@ -109,14 +105,10 @@ export function getConfirmedThread(conversationId: string, store?: ChatStore): S
  * window on every call. Fine at this scale; worth revisiting in Phase 5 if
  * profiling shows it's the bottleneck on the 50k-message conversation.
  */
-export function getThreadWindow(
-  conversationId: string,
-  limit: number,
-  store?: ChatStore,
-): ServerMessage[] {
-  return resolveStore(store).getThreadMessagesPage(conversationId, { limit });
+export function getThreadWindow(conversationId: string, limit: number): ServerMessage[] {
+  return resolveStore().getThreadMessagesPage(conversationId, { limit });
 }
 
-export function getPendingMessages(conversationId: string, store?: ChatStore): ClientMessage[] {
-  return resolveStore(store).getPendingMessages(conversationId);
+export function getPendingMessages(conversationId: string): ClientMessage[] {
+  return resolveStore().getPendingMessages(conversationId);
 }

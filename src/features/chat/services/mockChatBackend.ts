@@ -1,3 +1,4 @@
+import type { SeedMessage } from "@/features/chat/constants/mockMessages";
 import type { ClientMessage, ServerMessage } from "@/features/chat/types";
 
 /**
@@ -41,10 +42,33 @@ export type MockChatBackend = {
  * the non-deduping one exists only to reproduce the duplicate-message bug in
  * tests.
  */
-export function createMockChatBackend(dedupeByClientId: boolean = true): MockChatBackend {
-  const messages: ServerMessage[] = [];
+/**
+ * Shared across every backend instance (one per conversationId) so serverId
+ * stays globally unique — the messages table's primary key isn't scoped by
+ * conversationId, so two backends both starting their own counter at 1 would
+ * collide and silently drop one conversation's messages via INSERT OR IGNORE.
+ */
+let nextServerId = 1;
+
+export function createMockChatBackend(
+  dedupeByClientId: boolean = true,
+  seedMessages: SeedMessage[] = [],
+): MockChatBackend {
+  // seed.serverId is deterministic (fixed per conversationId + index), not
+  // drawn from nextServerId: the mock backend and its counter are recreated
+  // from scratch on every app reload, but the messages table in SQLite
+  // persists across reloads. A counter-based id would mint a "new" row for
+  // the same seed message on every reload, and INSERT OR IGNORE would never
+  // recognize it as a duplicate — accumulating repeated openers over time.
+  const messages: ServerMessage[] = seedMessages.map((seed) => ({
+    serverId: seed.serverId,
+    clientId: null,
+    conversationId: seed.conversationId,
+    senderId: seed.senderId,
+    text: seed.text,
+    createdAt: seed.createdAt,
+  }));
   const acceptedByClientId = new Map<string, ServerMessage>();
-  let nextServerId = 1;
 
   return {
     submitMessage(message, senderId, options) {

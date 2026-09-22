@@ -6,12 +6,25 @@ import {
   PERF_TEST_MESSAGE_COUNT,
 } from "@/features/chat/utils/generatePerfTestMessages";
 
+let storeOverrideForTests: ChatStore | null = null;
+
+/** Test-only: forces ensurePerfTestMessagesSeeded to use this store instead of SQLite. */
+export function setPerfTestSeedStoreForTests(store: ChatStore): void {
+  storeOverrideForTests = store;
+}
+
+/** Test-only: clears the store override. */
+export function resetPerfTestSeedStore(): void {
+  storeOverrideForTests = null;
+}
+
 /**
  * Seeds the 50k-message perf dataset once, the first time it's needed —
  * idempotent, so opening the perf-test conversation repeatedly never
  * re-inserts or duplicates it.
  */
-export function ensurePerfTestMessagesSeeded(store: ChatStore = createSqliteChatStore()): void {
+export function ensurePerfTestMessagesSeeded(): void {
+  const store = storeOverrideForTests ?? createSqliteChatStore();
   const existingCount = store.countMessages(PERF_TEST_CONVERSATION_ID);
 
   if (existingCount >= PERF_TEST_MESSAGE_COUNT) {

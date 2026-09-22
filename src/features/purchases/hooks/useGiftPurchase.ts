@@ -1,6 +1,5 @@
 import { useState } from "react";
 
-import { getPurchaseBackend } from "@/features/purchases/services/purchaseBackendRegistry";
 import {
   confirmPurchase,
   getEntitlementStatus,
@@ -23,9 +22,8 @@ export function useGiftPurchase(userId: string, productId: string) {
     setState("pending");
     setErrorMessage(null);
 
-    const backend = getPurchaseBackend();
     const purchase = initiatePurchase(productId, amountCents, "USD");
-    const processedPurchase = processPurchase(purchase, backend, userId);
+    const processedPurchase = processPurchase(purchase, userId);
 
     if (processedPurchase.status === StorePurchaseStatus.Canceled) {
       setState("canceled");
@@ -38,7 +36,7 @@ export function useGiftPurchase(userId: string, productId: string) {
       return false;
     }
 
-    confirmPurchase(processedPurchase.purchaseId, backend);
+    confirmPurchase(processedPurchase.purchaseId);
     const entitlement = getEntitlementStatus(productId);
 
     if (entitlement === EntitlementStatus.Active) {

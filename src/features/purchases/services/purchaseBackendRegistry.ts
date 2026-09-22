@@ -10,3 +10,8 @@ export function getPurchaseBackend(): MockPurchaseBackend {
 
   return purchaseBackend;
 }
+
+/** Test-only: clears the cached backend so each test starts from a fresh one. */
+export function resetPurchaseBackend(): void {
+  purchaseBackend = null;
+}

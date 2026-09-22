@@ -1,9 +1,15 @@
 import {
+  resetConversationBackends,
+  setConversationBackendForTests,
+} from "@/features/chat/services/chatBackendRegistry";
+import {
   enqueueMessage,
   flushPendingMessages,
   getConfirmedThread,
   getPendingMessages,
   receiveMessages,
+  resetChatServiceStore,
+  setChatServiceStoreForTests,
   syncThread,
 } from "@/features/chat/services/chatService";
 import {
@@ -43,84 +49,91 @@ function createResponseDroppingBackend(
 const conversationId = "conversation-1";
 const senderId = "fan-1";
 
+beforeEach(() => {
+  resetConversationBackends();
+  setChatServiceStoreForTests(createInMemoryChatStore());
+});
+
+afterEach(() => {
+  resetChatServiceStore();
+});
+
 describe("chatService bug reproduction: lost response after retry", () => {
   it("documents the bug — a backend that does not dedupe by clientId creates two messages", () => {
-    const store = createInMemoryChatStore();
     const buggyBackend = createMockChatBackend(false);
 
-    const message = enqueueMessage(conversationId, "hello", store);
+    const message = enqueueMessage(conversationId, "hello");
 
     // First attempt: backend accepts and stores it, but the response is lost.
     const droppingOnce = createResponseDroppingBackend(buggyBackend, [message.clientId]);
-    flushPendingMessages(droppingOnce, conversationId, senderId, store);
-    expect(getPendingMessages(conversationId, store)[0].status).toBe(MessageStatus.Failed);
+    setConversationBackendForTests(conversationId, droppingOnce);
+    flushPendingMessages(conversationId, senderId);
+    expect(getPendingMessages(conversationId)[0].status).toBe(MessageStatus.Failed);
 
     // Retry: same clientId, but the buggy backend has no memory of it — a
     // second message is created server-side.
-    flushPendingMessages(buggyBackend, conversationId, senderId, store);
+    setConversationBackendForTests(conversationId, buggyBackend);
+    flushPendingMessages(conversationId, senderId);
 
     // Reconnect sync pulls the backend's canonical thread, surfacing both.
-    syncThread(buggyBackend, conversationId, store);
+    syncThread(conversationId);
 
-    expect(getConfirmedThread(conversationId, store)).toHaveLength(2);
+    expect(getConfirmedThread(conversationId)).toHaveLength(2);
   });
 });
 
 describe("chatService fix: idempotent retry after a lost response", () => {
   it("resolves to a single message no matter how many times the retry runs", () => {
-    const store = createInMemoryChatStore();
     const backend = createMockChatBackend(true);
 
-    const message = enqueueMessage(conversationId, "hello", store);
+    const message = enqueueMessage(conversationId, "hello");
 
     const droppingOnce = createResponseDroppingBackend(backend, [message.clientId]);
-    flushPendingMessages(droppingOnce, conversationId, senderId, store);
-    expect(getPendingMessages(conversationId, store)[0].status).toBe(MessageStatus.Failed);
-    expect(getConfirmedThread(conversationId, store)).toHaveLength(0);
+    setConversationBackendForTests(conversationId, droppingOnce);
+    flushPendingMessages(conversationId, senderId);
+    expect(getPendingMessages(conversationId)[0].status).toBe(MessageStatus.Failed);
+    expect(getConfirmedThread(conversationId)).toHaveLength(0);
 
-    flushPendingMessages(backend, conversationId, senderId, store);
-    syncThread(backend, conversationId, store);
+    setConversationBackendForTests(conversationId, backend);
+    flushPendingMessages(conversationId, senderId);
+    syncThread(conversationId);
 
-    const thread = getConfirmedThread(conversationId, store);
+    const thread = getConfirmedThread(conversationId);
     expect(thread).toHaveLength(1);
     expect(thread[0].text).toBe("hello");
-    expect(getPendingMessages(conversationId, store)).toHaveLength(0);
+    expect(getPendingMessages(conversationId)).toHaveLength(0);
   });
 
   it("still resolves to one message after a third redundant retry", () => {
-    const store = createInMemoryChatStore();
-    const backend = createMockChatBackend(true);
+    setConversationBackendForTests(conversationId, createMockChatBackend(true));
 
-    enqueueMessage(conversationId, "hello", store);
+    enqueueMessage(conversationId, "hello");
 
-    flushPendingMessages(backend, conversationId, senderId, store);
-    flushPendingMessages(backend, conversationId, senderId, store);
-    flushPendingMessages(backend, conversationId, senderId, store);
-    syncThread(backend, conversationId, store);
+    flushPendingMessages(conversationId, senderId);
+    flushPendingMessages(conversationId, senderId);
+    flushPendingMessages(conversationId, senderId);
+    syncThread(conversationId);
 
-    expect(getConfirmedThread(conversationId, store)).toHaveLength(1);
+    expect(getConfirmedThread(conversationId)).toHaveLength(1);
   });
 });
 
 describe("chatService offline queueing", () => {
   it("keeps messages pending, in order, until they are flushed", () => {
-    const store = createInMemoryChatStore();
+    enqueueMessage(conversationId, "first");
+    enqueueMessage(conversationId, "second");
+    enqueueMessage(conversationId, "third");
 
-    enqueueMessage(conversationId, "first", store);
-    enqueueMessage(conversationId, "second", store);
-    enqueueMessage(conversationId, "third", store);
-
-    const pending = getPendingMessages(conversationId, store);
+    const pending = getPendingMessages(conversationId);
 
     expect(pending.map((message) => message.text)).toEqual(["first", "second", "third"]);
     expect(pending.every((message) => message.status === MessageStatus.Pending)).toBe(true);
-    expect(getConfirmedThread(conversationId, store)).toHaveLength(0);
+    expect(getConfirmedThread(conversationId)).toHaveLength(0);
   });
 });
 
 describe("chatService incoming message reconciliation", () => {
   it("does not duplicate the thread when the same batch is received twice", () => {
-    const store = createInMemoryChatStore();
     const incoming: ServerMessage[] = [
       {
         serverId: "srv_a",
@@ -156,16 +169,15 @@ describe("chatService incoming message reconciliation", () => {
       },
     ];
 
-    receiveMessages(incoming, store);
-    receiveMessages(incoming, store);
+    receiveMessages(incoming);
+    receiveMessages(incoming);
 
-    expect(getConfirmedThread(conversationId, store)).toHaveLength(4);
+    expect(getConfirmedThread(conversationId)).toHaveLength(4);
   });
 });
 
 describe("chatService failure handling", () => {
   it("preserves the text and marks the message failed when the backend rejects it", () => {
-    const store = createInMemoryChatStore();
     const unreachableBackend: MockChatBackend = {
       submitMessage() {
         throw new Error("network unreachable");
@@ -177,11 +189,12 @@ describe("chatService failure handling", () => {
         throw new Error("not used in this test");
       },
     };
+    setConversationBackendForTests(conversationId, unreachableBackend);
 
-    enqueueMessage(conversationId, "please deliver", store);
-    flushPendingMessages(unreachableBackend, conversationId, senderId, store);
+    enqueueMessage(conversationId, "please deliver");
+    flushPendingMessages(conversationId, senderId);
 
-    const pending = getPendingMessages(conversationId, store);
+    const pending = getPendingMessages(conversationId);
     expect(pending).toHaveLength(1);
     expect(pending[0].status).toBe(MessageStatus.Failed);
     expect(pending[0].text).toBe("please deliver");

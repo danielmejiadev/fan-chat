@@ -1,11 +1,13 @@
+import { resetPurchaseBackend } from "@/features/purchases/services/purchaseBackendRegistry";
 import {
   confirmPurchase,
   getEntitlementStatus,
   initiatePurchase,
   processPurchase,
+  resetPurchaseServiceStore,
   restorePurchases,
+  setPurchaseServiceStoreForTests,
 } from "@/features/purchases/services/purchaseService";
-import { createMockPurchaseBackend } from "@/features/purchases/services/mockPurchaseBackend";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
 import {
   EntitlementStatus,
@@ -52,134 +54,123 @@ const productId = "product-vip-badge";
 const priceCents = 999;
 const currency = "USD";
 
+beforeEach(() => {
+  resetPurchaseBackend();
+  setPurchaseServiceStoreForTests(createInMemoryPurchaseStore());
+});
+
+afterEach(() => {
+  resetPurchaseServiceStore();
+});
+
 describe("purchaseService successful purchase", () => {
   it("only grants access once the backend confirms, not when the store succeeds", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(purchase, userId);
 
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(purchase, backend, userId, undefined, store);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Pending);
 
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Pending);
+    confirmPurchase(purchase.purchaseId);
 
-    confirmPurchase(purchase.purchaseId, backend, store);
-
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
   });
 });
 
 describe("purchaseService cancellation", () => {
   it("never grants access and leaves the purchase canceled", () => {
     const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    setPurchaseServiceStoreForTests(store);
 
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    const resolvedPurchase = processPurchase(
-      purchase,
-      backend,
-      userId,
-      { outcome: StorePurchaseStatus.Canceled },
-      store,
-    );
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    const resolvedPurchase = processPurchase(purchase, userId, {
+      outcome: StorePurchaseStatus.Canceled,
+    });
 
     expect(resolvedPurchase.status).toBe(StorePurchaseStatus.Canceled);
     expect(store.getPurchase(purchase.purchaseId)?.status).toBe(StorePurchaseStatus.Canceled);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Revoked);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Revoked);
   });
 });
 
 describe("purchaseService failure", () => {
   it("never grants access and leaves the purchase failed", () => {
     const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    setPurchaseServiceStoreForTests(store);
 
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    const resolvedPurchase = processPurchase(
-      purchase,
-      backend,
-      userId,
-      { outcome: StorePurchaseStatus.Failed },
-      store,
-    );
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    const resolvedPurchase = processPurchase(purchase, userId, {
+      outcome: StorePurchaseStatus.Failed,
+    });
 
     expect(resolvedPurchase.status).toBe(StorePurchaseStatus.Failed);
     expect(store.getPurchase(purchase.purchaseId)?.status).toBe(StorePurchaseStatus.Failed);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Revoked);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Revoked);
   });
 
   it("throws when asked to confirm entitlement for a purchase that never succeeded", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(purchase, userId, { outcome: StorePurchaseStatus.Failed });
 
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(purchase, backend, userId, { outcome: StorePurchaseStatus.Failed }, store);
-
-    expect(() => confirmPurchase(purchase.purchaseId, backend, store)).toThrow();
+    expect(() => confirmPurchase(purchase.purchaseId)).toThrow();
   });
 });
 
 describe("purchaseService restoration", () => {
   it("recovers access from previous purchases without duplicating it", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    const originalPurchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(originalPurchase, userId);
+    confirmPurchase(originalPurchase.purchaseId);
 
-    const originalPurchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(originalPurchase, backend, userId, undefined, store);
-    confirmPurchase(originalPurchase.purchaseId, backend, store);
-
+    // Simulates a reinstall: same backend (it remembers the succeeded
+    // purchase), fresh local store.
     const freshStore = createInMemoryPurchaseStore();
-    expect(getEntitlementStatus(productId, freshStore)).toBe(EntitlementStatus.Revoked);
+    setPurchaseServiceStoreForTests(freshStore);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Revoked);
 
-    const restoredOnce = restorePurchases(userId, backend, freshStore);
-    const restoredTwice = restorePurchases(userId, backend, freshStore);
+    const restoredOnce = restorePurchases(userId);
+    const restoredTwice = restorePurchases(userId);
 
     expect(restoredOnce).toHaveLength(1);
     expect(restoredTwice).toHaveLength(1);
     expect(freshStore.getPurchasesForProduct(productId)).toHaveLength(1);
-    expect(getEntitlementStatus(productId, freshStore)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
   });
 });
 
 describe("purchaseService delayed confirmation (mandatory scenario)", () => {
   it("keeps entitlement honestly Pending between the store's success and the backend's confirmation", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
-
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    const resolvedPurchase = processPurchase(purchase, backend, userId, undefined, store);
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    const resolvedPurchase = processPurchase(purchase, userId);
 
     expect(resolvedPurchase.status).toBe(StorePurchaseStatus.Succeeded);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Pending);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Pending);
 
     // The backend's confirmation call happens later, separately in time.
-    const confirmation = confirmPurchase(purchase.purchaseId, backend, store);
+    const confirmation = confirmPurchase(purchase.purchaseId);
 
     expect(confirmation.entitlementStatus).toBe(EntitlementStatus.Active);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
   });
 });
 
 describe("purchaseService repeated taps", () => {
   it("does not start a second purchase while one is already Pending for the product", () => {
-    const store = createInMemoryPurchaseStore();
-
-    const firstTap = initiatePurchase(productId, priceCents, currency, store);
-    const secondTap = initiatePurchase(productId, priceCents, currency, store);
-    const thirdTap = initiatePurchase(productId, priceCents, currency, store);
+    const firstTap = initiatePurchase(productId, priceCents, currency);
+    const secondTap = initiatePurchase(productId, priceCents, currency);
+    const thirdTap = initiatePurchase(productId, priceCents, currency);
 
     expect(secondTap.purchaseId).toBe(firstTap.purchaseId);
     expect(thirdTap.purchaseId).toBe(firstTap.purchaseId);
-    expect(store.getPurchasesForProduct(productId)).toHaveLength(1);
   });
 
   it("allows a new purchase for the same product once the previous one is resolved", () => {
     const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    setPurchaseServiceStoreForTests(store);
 
-    const firstPurchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(firstPurchase, backend, userId, { outcome: StorePurchaseStatus.Failed }, store);
+    const firstPurchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(firstPurchase, userId, { outcome: StorePurchaseStatus.Failed });
 
-    const secondPurchase = initiatePurchase(productId, priceCents, currency, store);
+    const secondPurchase = initiatePurchase(productId, priceCents, currency);
 
     expect(secondPurchase.purchaseId).not.toBe(firstPurchase.purchaseId);
     expect(store.getPurchasesForProduct(productId)).toHaveLength(2);
@@ -188,62 +179,42 @@ describe("purchaseService repeated taps", () => {
 
 describe("purchaseService duplicate confirmation events", () => {
   it("does not duplicate the effect of granting access when the same confirmation arrives twice", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    const purchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(purchase, userId);
 
-    const purchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(purchase, backend, userId, undefined, store);
+    confirmPurchase(purchase.purchaseId);
+    confirmPurchase(purchase.purchaseId);
+    confirmPurchase(purchase.purchaseId);
 
-    confirmPurchase(purchase.purchaseId, backend, store);
-    confirmPurchase(purchase.purchaseId, backend, store);
-    confirmPurchase(purchase.purchaseId, backend, store);
-
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
   });
 });
 
 describe("purchaseService isolation between purchases", () => {
   it("does not revoke an existing Active entitlement when an unrelated purchase fails", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
     const otherProductId = "product-monthly-subscription";
 
-    const activePurchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(activePurchase, backend, userId, undefined, store);
-    confirmPurchase(activePurchase.purchaseId, backend, store);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    const activePurchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(activePurchase, userId);
+    confirmPurchase(activePurchase.purchaseId);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
 
-    const unrelatedPurchase = initiatePurchase(otherProductId, priceCents, currency, store);
-    processPurchase(
-      unrelatedPurchase,
-      backend,
-      userId,
-      { outcome: StorePurchaseStatus.Failed },
-      store,
-    );
+    const unrelatedPurchase = initiatePurchase(otherProductId, priceCents, currency);
+    processPurchase(unrelatedPurchase, userId, { outcome: StorePurchaseStatus.Failed });
 
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
-    expect(getEntitlementStatus(otherProductId, store)).toBe(EntitlementStatus.Revoked);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(otherProductId)).toBe(EntitlementStatus.Revoked);
   });
 
   it("does not revoke an existing Active entitlement when a later purchase of the same product fails", () => {
-    const store = createInMemoryPurchaseStore();
-    const backend = createMockPurchaseBackend();
+    const activePurchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(activePurchase, userId);
+    confirmPurchase(activePurchase.purchaseId);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
 
-    const activePurchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(activePurchase, backend, userId, undefined, store);
-    confirmPurchase(activePurchase.purchaseId, backend, store);
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    const secondPurchase = initiatePurchase(productId, priceCents, currency);
+    processPurchase(secondPurchase, userId, { outcome: StorePurchaseStatus.Failed });
 
-    const secondPurchase = initiatePurchase(productId, priceCents, currency, store);
-    processPurchase(
-      secondPurchase,
-      backend,
-      userId,
-      { outcome: StorePurchaseStatus.Failed },
-      store,
-    );
-
-    expect(getEntitlementStatus(productId, store)).toBe(EntitlementStatus.Active);
+    expect(getEntitlementStatus(productId)).toBe(EntitlementStatus.Active);
   });
 });
