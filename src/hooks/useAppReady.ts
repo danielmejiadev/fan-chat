@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 
 import { initializeAppDatabase } from "@/lib/database";
 import { useAppFonts } from "@/hooks/useAppFonts";
+import { ensurePerfTestMessagesSeeded } from "@/features/chat/services/perfTestSeed";
 import migrations from "../../drizzle/app/migrations";
 
 SplashScreen.preventAutoHideAsync();
@@ -32,6 +33,12 @@ export function useAppReady(): UseAppReadyResult {
         if (!isCancelled) {
           setMigrationsSucceeded(true);
         }
+
+        // Fire-and-forget: seeds the 50k-message perf-test dataset in the
+        // background so it's ready by the time that conversation is opened,
+        // without delaying app startup (splash hide only waits on
+        // migrationsSucceeded above).
+        void ensurePerfTestMessagesSeeded();
       })
       .catch((error: Error) => {
         if (!isCancelled) {
