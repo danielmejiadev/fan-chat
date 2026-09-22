@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getConfirmedMessagesPage } from "@/features/chat/services/chatService";
 import type { ServerMessage } from "@/features/chat/types";
@@ -20,13 +20,22 @@ export function useConfirmedMessages(conversationId: string): UseConfirmedMessag
   // Heuristic: a full page might mean there's more history to load; a short
   // one means we've reached the start of the thread.
   const [hasMore, setHasMore] = useState(false);
+  // refresh() can be called from several overlapping reconcile runs; guard
+  // against an older read resolving after a newer one and clobbering it
+  // with a stale page (see the matching guard in usePendingMessages).
+  const latestRequestId = useRef(0);
 
   const loadPage = useCallback(
-    (size: number) =>
-      getConfirmedMessagesPage(conversationId, size).then((page) => {
-        setConfirmedMessages(page);
-        setHasMore(page.length >= size);
-      }),
+    (size: number) => {
+      const requestId = ++latestRequestId.current;
+
+      return getConfirmedMessagesPage(conversationId, size).then((page) => {
+        if (requestId === latestRequestId.current) {
+          setConfirmedMessages(page);
+          setHasMore(page.length >= size);
+        }
+      });
+    },
     [conversationId],
   );
 

@@ -170,6 +170,23 @@ export async function syncThread(conversationId: string): Promise<void> {
   await receiveMessages(backend.listMessages(conversationId));
 }
 
+/**
+ * Submits whatever's currently queued for a conversation to the mock
+ * backend and immediately reconciles the response — used right after a
+ * fresh send and when retrying a failed message. This is the entire
+ * request/response round trip for that one action; it does not depend on
+ * mockChatConnection at all. Backend-side changes this device didn't
+ * initiate (an incoming message, another device's own submission) still
+ * reach the client through mockChatConnection's own backend subscription.
+ */
+export async function submitPendingMessages(
+  conversationId: string,
+  senderId: string,
+): Promise<void> {
+  await flushPendingMessages(conversationId, senderId);
+  await syncThread(conversationId);
+}
+
 export async function getConfirmedThread(conversationId: string): Promise<ServerMessage[]> {
   return resolveStore().getThreadMessages(conversationId);
 }

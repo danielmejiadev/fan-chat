@@ -158,7 +158,7 @@ describe("chatService delivery ticks: Pending stays observable before Sent is co
       hasFlushResolved = true;
     });
 
-    // The caller (useChatConnection's forceSync) only notifies the UI to
+    // The caller (usePendingMessages' submitPending) only notifies the UI to
     // re-render with the Sent status after flushPendingMessages resolves —
     // this delay is what keeps the client's optimistic Pending bubble on
     // screen for a beat instead of flipping to Sent virtually instantly.
@@ -264,6 +264,9 @@ describe("chatService failure handling", () => {
       },
       receiveIncomingMessage() {
         throw new Error("not used in this test");
+      },
+      subscribe() {
+        return () => {};
       },
     };
     setConversationBackendForTests(conversationId, unreachableBackend);

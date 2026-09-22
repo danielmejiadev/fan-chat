@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import { useChatConnection } from "@/features/chat/hooks/useChatConnection";
 import { useConfirmedMessages } from "@/features/chat/hooks/useConfirmedMessages";
 import { usePendingMessages } from "@/features/chat/hooks/usePendingMessages";
+import { submitPendingMessages } from "@/features/chat/services/chatService";
 import type { ThreadMessage } from "@/features/chat/types";
 import { mergeThreadMessages } from "@/features/chat/utils/mergeThreadMessages";
 
@@ -12,8 +13,6 @@ export type UseChatThreadResult = {
   retryMessage: (clientId: string) => void;
   loadOlderMessages: () => void;
   hasMoreOlderMessages: boolean;
-  /** Forces an immediate sync — used by the debug menu after simulating backend-side changes. */
-  forceSync: () => void;
 };
 
 /** Assumes it's remounted per conversationId, so nothing here detects a conversation change itself. */
@@ -27,7 +26,7 @@ export function useChatThread(conversationId: string, senderId: string): UseChat
 
   const {
     pendingMessages,
-    send: sendPendingMessage,
+    enqueue: enqueuePendingMessage,
     isFailed: isPendingMessageFailed,
     refresh: refreshPendingMessages,
   } = usePendingMessages(conversationId);
@@ -39,23 +38,29 @@ export function useChatThread(conversationId: string, senderId: string): UseChat
     void refreshConfirmedMessages().then(() => refreshPendingMessages());
   }, [refreshConfirmedMessages, refreshPendingMessages]);
 
-  const { forceSync } = useChatConnection(conversationId, senderId, refresh);
+  useChatConnection(conversationId, senderId, refresh);
+
+  // Submits to the mock backend and reconciles the result — used right
+  // after a fresh send and after a manual retry. This talks to chatService
+  // directly; it never goes through mockChatConnection.
+  const submit = useCallback(() => {
+    void submitPendingMessages(conversationId, senderId).then(refresh);
+  }, [conversationId, senderId, refresh]);
 
   const sendMessage = useCallback(
     (text: string) => {
-      sendPendingMessage(text);
-      forceSync();
+      void enqueuePendingMessage(text).then(submit);
     },
-    [sendPendingMessage, forceSync],
+    [enqueuePendingMessage, submit],
   );
 
   const retryMessage = useCallback(
     (clientId: string) => {
       if (isPendingMessageFailed(clientId)) {
-        forceSync();
+        submit();
       }
     },
-    [isPendingMessageFailed, forceSync],
+    [isPendingMessageFailed, submit],
   );
 
   const messages = mergeThreadMessages(confirmedMessages, pendingMessages);
@@ -66,6 +71,5 @@ export function useChatThread(conversationId: string, senderId: string): UseChat
     retryMessage,
     loadOlderMessages,
     hasMoreOlderMessages,
-    forceSync,
   };
 }
