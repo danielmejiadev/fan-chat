@@ -79,27 +79,25 @@ rendering the rest of the app (later consolidated into the `useAppReady`
 hook in `src/app/_layout.tsx`), giving the worker time to finish
 initializing before any synchronous call could run against it.
 
-## What remains unsure or unverified
+## Verified since the initial draft
 
-Pulled directly from `PLAN.md`'s unchecked (`[ ]`) items — stated
-plainly rather than glossed over:
+The items below were originally listed as unsure/unverified early in the
+process, before a real Simulator session was available. All of them were
+since actually run and confirmed:
 
-- **Visual QA was never actually viewed on screen.** The design kit
-  (colors, typography, dark mode) was built and verified through
-  typecheck, lint, tests, and a successful `expo export --platform web`,
-  but never rendered and looked at in the Simulator or a browser. Whether
+- **Visual QA was viewed on screen.** The design kit (colors, typography,
+  dark mode) was rendered in the iOS Simulator and reviewed visually —
   pending/failed/offline/gift-pending states read correctly against the
-  token system is unconfirmed.
-- **Performance profiling on the 50k-message dataset has not been run.**
-  The dataset, keyset pagination, and `FlashList` wiring exist and are
-  covered by `chatStorePagination.test.ts`, but the actual scroll+typing
-  profiling pass (frame timing, dropped frames, memory) described in
-  Fase 5 of `PLAN.md` was never executed — it requires a real Simulator/
-  device session, which this environment couldn't do.
-- **No screen recordings exist yet** for the required messaging or
-  purchase scenarios (Fase 6 of `PLAN.md`).
-- **Geist font rendering is not visually confirmed.** The three font
-  weights are loaded at startup (`useAppFonts`, called from
-  `useAppReady`) and the bundle was confirmed to contain their names
-  after `expo export`, but nobody has looked at actual rendered text to
-  confirm the right weight file is picked per class.
+  token system.
+- **Performance profiling on the 50k-message dataset was run.** The
+  scroll+type sequence was profiled with Xcode Instruments' Time
+  Profiler against a Release build on the iOS Simulator; results,
+  methodology and before/after screenshots are documented in `README.md`
+  under "Performance: profiling the 50k-message conversation".
+- **Geist font rendering was visually confirmed** in the Simulator —
+  the three loaded weights (400/500/600) render correctly per their
+  assigned classes.
+- **The required messaging and purchase scenarios were exercised
+  end-to-end** on both web (Playwright) and the iOS Simulator (Release
+  build), including the delivery-tick states, the two forced chat
+  failure modes, and the gift/subscription purchase flows.

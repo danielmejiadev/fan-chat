@@ -83,6 +83,47 @@ There are three routes: `src/app/index.tsx` (chat list) and
 thread screen, opened from the gift icon in `MessageInput` and from
 `BecomeFanButton` in the thread header.
 
+#### `src/components/ui/` — native primitive library
+
+The lowest-level building blocks, with no business logic and no knowledge
+of navigation or a specific screen: `Text`/`TextInput` (thin wrappers that
+bake in the Geist font as the default — see "Typography" below), `Icon`
+(wraps `Ionicons` via NativeWind's `cssInterop` so it reads color tokens
+through `className` instead of a hardcoded hex), `Avatar`, `IconButton`.
+Every other component in the app is built out of these, never out of
+raw `react-native` primitives directly.
+
+#### `src/components/layout/` — the app's navigational shell
+
+The structural frame the screens render inside, not a business-domain
+feature itself: `DesktopSidebar` (conversation list + `DemoResetButton` on
+wide screens), `MobileTabBar` (bottom tab bar on narrow screens),
+`SidebarItem`, `TabIcon`. Each route picks between the desktop and mobile
+variant at runtime via `useIsDesktopLayout`, instead of shipping two
+separate screens per platform.
+
+#### `src/features/chat/components/` — the chat feature's own UI
+
+Split into two sub-folders by what part of the flow they belong to:
+
+- **`conversations/`** (the chat list): `Conversations`,
+  `ConversationListItem`, `ConversationListView`, `ConversationSearch`,
+  `ChatListHeader`.
+- **`chatDetail/`** (a single thread): `ThreadPane` (composes everything
+  below plus `KeyboardAvoidingView`/`SafeAreaView`), `MessagesList` (the
+  `FlashList` wiring, pagination, scroll-to-bottom), `MessageBubble` (one
+  message row — memoized, see "Performance" below), `MessageInput`
+  (compose box + gift icon), `ChatThreadHeader` (title + `BecomeFanButton`),
+  `GiftRow` (system message dropped into the thread after a gift),
+  `OfflineBanner` (animated banner shown while `useChatConnection` reports
+  offline).
+
+`GiftModal` (gifts feature) and `FanPaywallModal` (subscriptions feature)
+follow the same one-component-per-file, atomic pattern, each owning only
+the markup and local form state its own purchase flow needs — the actual
+purchase logic lives in their respective `hooks/`/`services/`, never
+inside the modal itself.
+
 ### Hooks — `src/features/*/hooks/`, `src/hooks/`
 
 The client-side glue layer: local React state and optimistic updates. No
