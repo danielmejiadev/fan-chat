@@ -2,6 +2,7 @@
 
 ## Contents
 
+- [Videos](#videos)
 - [Platform tested](#platform-tested)
 - [Requirements](#requirements)
 - [Install](#install)
@@ -15,6 +16,18 @@
 - [Performance](#performance-profiling-the-50k-message-conversation)
 - [Time spent](#time-spent)
 - [Known limitations / not yet done](#known-limitations--not-yet-done)
+
+## Videos
+
+Recordings: https://drive.google.com/drive/folders/1NhzTVFBhF0AXui6RqNNat2EXMKz2UIwp?usp=sharing
+
+1. **Walkthrough** — a tour through the UI and the app, on both iOS and
+   desktop.
+2. **Message flow** — sending, receiving, and how a message moves through
+   its delivery states.
+3. **Payments** — the paywall/subscription purchase flow and sending a
+   gift as a chat message.
+4. **Performance** — scrolling the 50,000-message chat thread.
 
 ## Platform tested
 
