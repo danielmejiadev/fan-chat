@@ -94,25 +94,42 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
   - Scroll a 50,000-message thread with keyset pagination
     (`@shopify/flash-list`), reachable from the normal chat list.
   - Search conversations (`ConversationSearch`).
-- **Gifts** — send a one-off tip from inside a thread (`GiftModal`:
-  amount, payment method, subtotal/fees/total), resolved instantly, with
-  a `GiftRow` system message dropped into the thread on confirmation.
-- **Subscriptions** — become a paying "Fan" of a creator
-  (`FanPaywallModal`, simulated payment sheet with Success/Cancel/Fail),
-  with a separate backend confirmation step (`PendingConfirmation` before
-  `Active`) and a "Restore purchase" flow.
-- **Dark mode** — follows the OS automatically (NativeWind `dark:`
-  variant), no manual in-app toggle.
+- **Gifts**
+  - Send a one-off tip from inside a thread (`GiftModal`: amount, payment
+    method, subtotal/fees/total).
+  - Resolves instantly, with no confirmation delay — a gift is meant to
+    feel immediate.
+  - Drops a `GiftRow` system message into the thread once confirmed.
+  - Repeated taps never duplicate a charge (idempotent per purchase).
+- **Subscriptions**
+  - Become a paying "Fan" of a creator (`FanPaywallModal`, a simulated
+    payment sheet with Success/Cancel/Fail buttons).
+  - Two-phase state: a succeeded purchase reads as `PendingConfirmation`
+    until the backend separately confirms it (~1.5s delay), then flips to
+    `Active` — never optimistically granted on payment alone.
+  - "Restore purchase" — reactivates an existing subscription without
+    creating a duplicate ledger entry.
+  - `BecomeFanButton`'s label follows live status: "Become a Fan" →
+    "Confirming access…" → "Fan in All Access".
+- **Dark mode**
+  - Follows the OS color scheme automatically (NativeWind `dark:`
+    variant).
+  - No manual in-app toggle — switches instantly when the OS setting
+    changes, no app restart needed.
 - **Demo controls** (always visible, every build — see "Demo controls"
-  below for the full list) — `ChatDebugMenu` to force chat failure modes,
-  go offline, simulate incoming messages and clear subscription access on
-  demand; `DemoResetButton` to wipe all local data and start a recording
-  from a clean state.
-- **Responsive desktop/mobile layout** — a `DesktopSidebar` +
-  multi-column view on wide screens, a `MobileTabBar` + full-screen view
-  on narrow ones, switching at runtime (`useIsDesktopLayout`). Only
-  actually tested on the **iOS Simulator** (see "Platform tested" above),
-  but the layout logic itself is platform-agnostic.
+  below for the full list)
+  - `ChatDebugMenu` — force chat failure modes, go offline, simulate
+    incoming messages, clear subscription access, all on demand.
+  - `DemoResetButton` — wipe all local data and start a recording from a
+    clean, reseeded state.
+- **Responsive desktop/mobile layout**
+  - `DesktopSidebar` + multi-column view on wide screens.
+  - `MobileTabBar` + full-screen view on narrow screens.
+  - Switches at runtime via `useIsDesktopLayout`, not a separate build per
+    platform.
+  - Only actually tested on the **iOS Simulator** (see "Platform tested"
+    above) — the layout logic itself is platform-agnostic, but unverified
+    on Android/web.
 
 Three features — **chat**, **gifts** and **subscriptions** — each run the
 same five layers:
