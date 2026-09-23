@@ -4,11 +4,7 @@ import {
   updatePurchaseStatus,
 } from "@/features/purchases/services/purchaseService";
 import { StorePurchaseStatus, type StorePurchase } from "@/features/purchases/types";
-import {
-  FAN_PRODUCT_CURRENCY,
-  FAN_PRODUCT_ID,
-  FAN_PRODUCT_PRICE_CENTS,
-} from "@/features/subscriptions/constants/fanProduct";
+import { FAN_PRODUCT } from "@/features/subscriptions/constants/fanProduct";
 import { SubscriptionStatus } from "@/features/subscriptions/types";
 import { createSqliteSubscriptionStore } from "@/features/subscriptions/storage/subscriptionsDatabase";
 import type { SubscriptionStore } from "@/features/subscriptions/storage/subscriptionStore";
@@ -105,8 +101,8 @@ export async function hydrateSubscription(userId: string): Promise<void> {
  * of starting a new purchase flow.
  */
 export function startSubscriptionPurchase(): Promise<StorePurchase> {
-  return dedupeInFlight(inFlightStartsByProductId, FAN_PRODUCT_ID, () =>
-    initiatePurchase(FAN_PRODUCT_ID, FAN_PRODUCT_PRICE_CENTS, FAN_PRODUCT_CURRENCY),
+  return dedupeInFlight(inFlightStartsByProductId, FAN_PRODUCT.id, () =>
+    initiatePurchase(FAN_PRODUCT.id, FAN_PRODUCT.priceCents, FAN_PRODUCT.currency),
   );
 }
 
@@ -136,13 +132,13 @@ export async function resolveSubscriptionPurchase(
  * way.
  */
 export function restoreSubscription(userId: string): Promise<StorePurchase | null> {
-  return dedupeInFlight(inFlightRestoresByProductId, FAN_PRODUCT_ID, () =>
+  return dedupeInFlight(inFlightRestoresByProductId, FAN_PRODUCT.id, () =>
     runSubscriptionRestore(userId),
   );
 }
 
 async function runSubscriptionRestore(_userId: string): Promise<StorePurchase | null> {
-  const previousPurchases = await getPurchasesForProduct(FAN_PRODUCT_ID);
+  const previousPurchases = await getPurchasesForProduct(FAN_PRODUCT.id);
   const restorablePurchase = previousPurchases.find(
     (purchase) =>
       purchase.status === StorePurchaseStatus.Succeeded ||

@@ -1,15 +1,12 @@
-export const FAN_PRODUCT_ID = "fan-membership";
-
-export const FAN_PRODUCT_NAME = "Fan Membership";
-
-export const FAN_PRODUCT_DESCRIPTION = "Get access to exclusive fan content.";
-
-export const FAN_PRODUCT_PRICE_CENTS = 499;
-
-export const FAN_PRODUCT_CURRENCY = "USD";
-
-export const FAN_PRODUCT_PERIOD = "month";
+export const FAN_PRODUCT = {
+  id: "fan-membership",
+  name: "Fan Membership",
+  description: "Get access to exclusive fan content.",
+  priceCents: 499,
+  currency: "USD",
+  period: "month",
+};
 
 export function formatFanProductPrice(): string {
-  return `$${(FAN_PRODUCT_PRICE_CENTS / 100).toFixed(2)} / ${FAN_PRODUCT_PERIOD}`;
+  return `$${(FAN_PRODUCT.priceCents / 100).toFixed(2)} / ${FAN_PRODUCT.period}`;
 }

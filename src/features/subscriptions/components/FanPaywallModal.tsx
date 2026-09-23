@@ -4,11 +4,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Text } from "@/components/ui/Text";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
-import {
-  FAN_PRODUCT_DESCRIPTION,
-  FAN_PRODUCT_NAME,
-  formatFanProductPrice,
-} from "@/features/subscriptions/constants/fanProduct";
+import { FAN_PRODUCT, formatFanProductPrice } from "@/features/subscriptions/constants/fanProduct";
 import { useSubscription } from "@/features/subscriptions/hooks/useSubscription";
 import { SubscriptionStatus } from "@/features/subscriptions/types";
 import {
@@ -42,10 +38,10 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
           />
 
           <Text className="text-h4 font-sans-semibold text-foreground-primary">
-            {FAN_PRODUCT_NAME}
+            {FAN_PRODUCT.name}
           </Text>
           <Text className="mt-1 text-body text-foreground-secondary">
-            {FAN_PRODUCT_DESCRIPTION}
+            {FAN_PRODUCT.description}
           </Text>
           <Text className="mt-3 text-h3 font-sans-semibold text-foreground-primary">
             {formatFanProductPrice()}
