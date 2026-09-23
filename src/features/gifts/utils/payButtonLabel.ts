@@ -1,8 +1,8 @@
 import { formatUsdFromCents } from "@/features/gifts/constants/giftAmounts";
-import type { GiftPurchaseState } from "@/features/gifts/hooks/useGiftPurchase";
+import { GiftPurchaseState } from "@/features/gifts/hooks/useGiftPurchase";
 
 export function getPayButtonLabel(state: GiftPurchaseState, amountCents: number) {
-  if (state === "pending") {
+  if (state === GiftPurchaseState.Pending) {
     return "Processing…";
   }
   return `Pay ${formatUsdFromCents(amountCents)}`;

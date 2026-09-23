@@ -4,7 +4,7 @@ import { clsx } from "clsx";
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { TextInput } from "@/components/ui/TextInput";
-import type { GiftPurchaseState } from "@/features/gifts/hooks/useGiftPurchase";
+import { GiftPurchaseState } from "@/features/gifts/hooks/useGiftPurchase";
 import { getPayButtonLabel } from "@/features/gifts/utils/payButtonLabel";
 
 interface GiftPaymentDetailsFormProps {
@@ -26,7 +26,7 @@ export function GiftPaymentDetailsForm({
   errorMessage,
   onPay,
 }: GiftPaymentDetailsFormProps) {
-  const isProcessing = state === "pending";
+  const isProcessing = state === GiftPurchaseState.Pending;
 
   return (
     <View className="flex-1 gap-4">
@@ -56,7 +56,7 @@ export function GiftPaymentDetailsForm({
         </Text>
       </Pressable>
       {errorMessage && <Text className="text-caption text-error">{errorMessage}</Text>}
-      {state === "canceled" && (
+      {state === GiftPurchaseState.Canceled && (
         <Text className="text-caption text-foreground-secondary">Purchase canceled.</Text>
       )}
       <Text className="text-caption text-foreground-secondary">

@@ -4,7 +4,13 @@ import { initiatePurchase } from "@/features/purchases/services/purchaseService"
 import { processGiftPurchase } from "@/features/gifts/services/giftPurchaseService";
 import { StorePurchaseStatus } from "@/features/purchases/types";
 
-export type GiftPurchaseState = "idle" | "pending" | "confirmed" | "failed" | "canceled";
+export enum GiftPurchaseState {
+  Idle = "idle",
+  Pending = "pending",
+  Confirmed = "confirmed",
+  Failed = "failed",
+  Canceled = "canceled",
+}
 
 /**
  * Each gift is its own independent, consumable transaction — sending one
@@ -12,36 +18,37 @@ export type GiftPurchaseState = "idle" | "pending" | "confirmed" | "failed" | "c
  * the backend or restore later.
  */
 export function useGiftPurchase(userId: string, productId: string) {
-  const [state, setState] = useState<GiftPurchaseState>("idle");
+  const [state, setState] = useState<GiftPurchaseState>(GiftPurchaseState.Idle);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const pay = async (amountCents: number): Promise<void> => {
+  const pay = async (amountCents: number): Promise<GiftPurchaseState> => {
     if (amountCents <= 0) {
-      return;
+      return state;
     }
 
-    setState("pending");
+    setState(GiftPurchaseState.Pending);
     setErrorMessage(null);
 
     const purchase = await initiatePurchase(productId, amountCents, "USD");
     const processedPurchase = await processGiftPurchase(purchase, userId);
 
     if (processedPurchase.status === StorePurchaseStatus.Canceled) {
-      setState("canceled");
-      return;
+      setState(GiftPurchaseState.Canceled);
+      return GiftPurchaseState.Canceled;
     }
 
     if (processedPurchase.status !== StorePurchaseStatus.Succeeded) {
-      setState("failed");
+      setState(GiftPurchaseState.Failed);
       setErrorMessage("Payment failed. Try again.");
-      return;
+      return GiftPurchaseState.Failed;
     }
 
-    setState("confirmed");
+    setState(GiftPurchaseState.Confirmed);
+    return GiftPurchaseState.Confirmed;
   };
 
   const reset = () => {
-    setState("idle");
+    setState(GiftPurchaseState.Idle);
     setErrorMessage(null);
   };
 

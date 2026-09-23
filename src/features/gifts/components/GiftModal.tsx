@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Modal, ScrollView, View } from "react-native";
 import { clsx } from "clsx";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +11,7 @@ import { GiftAmountSelector } from "@/features/gifts/components/GiftAmountSelect
 import { GiftModalHeader } from "@/features/gifts/components/GiftModalHeader";
 import { GiftPaymentDetailsForm } from "@/features/gifts/components/GiftPaymentDetailsForm";
 import { PaymentMethodSelector } from "@/features/gifts/components/PaymentMethodSelector";
-import { useGiftPurchase } from "@/features/gifts/hooks/useGiftPurchase";
+import { GiftPurchaseState, useGiftPurchase } from "@/features/gifts/hooks/useGiftPurchase";
 import { giftFormSchema, type GiftFormValues } from "@/features/gifts/utils/giftFormSchema";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
@@ -43,19 +42,16 @@ export function GiftModal({ conversation, visible, onClose, onGiftSent }: GiftMo
   );
   const selectedAmountCents = useWatch({ control, name: "amountCents" });
 
-  // Fires once this gift's own purchase resolves as succeeded — each gift is
-  // its own independent, consumable transaction, not an unlock of any
-  // persistent access.
-  useEffect(() => {
-    if (state === "confirmed") {
-      onGiftSent(`You sent a ${formatUsdFromCents(selectedAmountCents)} gift!`);
+  const onSubmit = async (values: GiftFormValues) => {
+    const outcome = await pay(values.amountCents);
+
+    // Each gift is its own independent, consumable transaction, not an
+    // unlock of any persistent access, so success just confirms and closes.
+    if (outcome === GiftPurchaseState.Confirmed) {
+      onGiftSent(`You sent a ${formatUsdFromCents(values.amountCents)} gift!`);
       reset();
       onClose();
     }
-  }, [state, selectedAmountCents, onGiftSent, reset, onClose]);
-
-  const onSubmit = (values: GiftFormValues) => {
-    void pay(values.amountCents);
   };
 
   return (
