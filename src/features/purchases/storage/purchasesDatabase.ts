@@ -27,14 +27,6 @@ export function createSqlitePurchaseStore(): PurchaseStore {
         .where(eq(storePurchases.purchaseId, purchaseId));
     },
 
-    async getPurchase(purchaseId: string): Promise<StorePurchase | undefined> {
-      const row = await database.query.storePurchases.findFirst({
-        where: eq(storePurchases.purchaseId, purchaseId),
-      });
-
-      return row as StorePurchase | undefined;
-    },
-
     async getPurchasesForProduct(productId: string): Promise<StorePurchase[]> {
       const rows = await database
         .select()

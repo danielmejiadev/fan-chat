@@ -21,9 +21,6 @@ export function createInMemoryPurchaseStore(): PurchaseStore {
         purchases.set(purchaseId, { ...existing, status });
       }
     },
-    async getPurchase(purchaseId) {
-      return purchases.get(purchaseId);
-    },
     async getPurchasesForProduct(productId) {
       return Array.from(purchases.values())
         .filter((purchase) => purchase.productId === productId)

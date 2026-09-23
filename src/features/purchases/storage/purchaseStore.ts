@@ -9,6 +9,5 @@ import type { StorePurchase, StorePurchaseStatus } from "@/features/purchases/ty
 export type PurchaseStore = {
   insertPurchase: (purchase: StorePurchase) => Promise<void>;
   updatePurchaseStatus: (purchaseId: string, status: StorePurchaseStatus) => Promise<void>;
-  getPurchase: (purchaseId: string) => Promise<StorePurchase | undefined>;
   getPurchasesForProduct: (productId: string) => Promise<StorePurchase[]>;
 };

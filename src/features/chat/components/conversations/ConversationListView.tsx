@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { FlatList, View } from "react-native";
 import { useRouter } from "expo-router";
 
@@ -14,10 +13,7 @@ interface ConversationListViewProps {
 export function ConversationListView({ conversationId, searchQuery }: ConversationListViewProps) {
   const router = useRouter();
 
-  const conversations = useMemo(
-    () => filterConversations(MOCK_CONVERSATIONS, searchQuery),
-    [searchQuery],
-  );
+  const conversations = filterConversations(MOCK_CONVERSATIONS, searchQuery);
 
   const selectConversation = (conversationId: string) => {
     router.push({ pathname: "/chat/[conversationId]", params: { conversationId } });

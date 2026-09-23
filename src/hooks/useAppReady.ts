@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { migrate } from "drizzle-orm/expo-sqlite/migrator";
 import * as SplashScreen from "expo-splash-screen";
 
@@ -24,7 +24,6 @@ export type UseAppReadyResult = {
 export function useAppReady(): UseAppReadyResult {
   const fontsLoaded = useAppFonts();
   const [migrationsSucceeded, setMigrationsSucceeded] = useState(false);
-  const [migrationsError, setMigrationsError] = useState<Error | null>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -47,9 +46,7 @@ export function useAppReady(): UseAppReadyResult {
         void hydrateSubscription(CURRENT_FAN_ID);
       })
       .catch((error: Error) => {
-        if (!isCancelled) {
-          setMigrationsError(error);
-        }
+        console.error("Database migration failed", error);
       });
 
     return () => {
@@ -57,19 +54,13 @@ export function useAppReady(): UseAppReadyResult {
     };
   }, []);
 
-  useEffect(() => {
-    if (migrationsError) {
-      console.error("Database migration failed", migrationsError);
-    }
-  }, [migrationsError]);
-
   const isReady = fontsLoaded && migrationsSucceeded;
 
-  const onRootViewLayout = useCallback(() => {
+  const onRootViewLayout = () => {
     if (isReady) {
       SplashScreen.hideAsync();
     }
-  }, [isReady]);
+  };
 
   return { isReady, onRootViewLayout };
 }
