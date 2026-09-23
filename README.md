@@ -86,9 +86,9 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
     state only lands after the mock backend's own confirmation event,
     never optimistically assumed.
   - Offline handling: an `OfflineBanner` while connectivity is down
-    (`@react-native-community/netinfo`), pending messages queue instead of
-    failing outright, and everything reconciles automatically on
-    reconnect/app-foreground.
+    (a debug-only forced-offline toggle — there's no real network check),
+    pending messages queue instead of failing outright, and everything
+    reconciles automatically on reconnect/app-foreground.
   - Receive incoming messages from the other participant in real time
     (event-driven, no polling).
   - Scroll a 50,000-message thread with keyset pagination
@@ -317,8 +317,8 @@ integration would replace outright, without touching anything above it:
   subscription: `mockChatBackend.subscribe()` notifies it the moment a
   message actually joins the canonical thread, instead of polling on a
   timer to find out. Owns every trigger for reconciling itself — the
-  backend's own change events, reconnect (`@react-native-community/netinfo`),
-  and app-foreground (`AppState`) — so nothing outside this file ever needs
+  backend's own change events, reconnect (the debug-only forced-offline
+  toggle), and app-foreground (`AppState`) — so nothing outside this file ever needs
   to ask it to sync; it reconciles (flush + full resync) on all of them to
   catch up on anything missed while offline.
 - `mockPurchaseBackend.ts` — the gift backend; resolves `Succeeded`

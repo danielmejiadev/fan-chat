@@ -1,4 +1,3 @@
-import NetInfo from "@react-native-community/netinfo";
 import { AppState, type AppStateStatus } from "react-native";
 
 import type { ChatConnection } from "@/mockApi/chat/chatConnection";
@@ -12,6 +11,11 @@ import {
 
 export const mockChatConnection: ChatConnection = {
   connect(conversationId, senderId, onChange) {
+    // Connectivity here is entirely driven by the debug-only forced-offline
+    // toggle (see debugNetworkStore.ts) — there's no real network to check.
+    let isForcedOfflineByDebugToggle = false;
+    const computeIsConnected = (): boolean => !isForcedOfflineByDebugToggle;
+
     // Optimistic default until the persisted forced-offline flag loads (see
     // below) — flushPendingMessages() re-checks it independently anyway, so
     // this only affects whether the very first reconcile's syncThread() runs
@@ -76,25 +80,16 @@ export const mockChatConnection: ChatConnection = {
     // "connected" for a beat, which is wrong when the app was force-quit
     // while intentionally offline.
     void waitForDebugNetworkHydration().then(() => {
-      isConnected = isConnected && !isDebugForcedOffline();
+      isForcedOfflineByDebugToggle = isDebugForcedOffline();
+      isConnected = computeIsConnected();
       reconcile();
     });
 
     // Syncs right away on reconnect instead of waiting for the next backend event.
-    const netInfoUnsubscribe = NetInfo.addEventListener((state) => {
-      const wasConnected = isConnected;
-      isConnected = state.isConnected !== false && !isDebugForcedOffline();
-
-      if (!wasConnected && isConnected) {
-        reconcile();
-      }
-    });
-
-    // Same reconnect/disconnect handling, but driven by the debug-only
-    // forced-offline toggle instead of NetInfo (see debugNetworkStore.ts).
     const debugOfflineUnsubscribe = useDebugNetworkStore.subscribe((state) => {
       const wasConnected = isConnected;
-      isConnected = !state.isForcedOffline;
+      isForcedOfflineByDebugToggle = state.isForcedOffline;
+      isConnected = computeIsConnected();
 
       if (!wasConnected && isConnected) {
         reconcile();
@@ -115,7 +110,6 @@ export const mockChatConnection: ChatConnection = {
     return {
       disconnect: () => {
         unsubscribeFromBackend();
-        netInfoUnsubscribe();
         debugOfflineUnsubscribe();
         appStateSubscription.remove();
       },

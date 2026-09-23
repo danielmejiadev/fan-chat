@@ -1,5 +1,3 @@
-import NetInfo from "@react-native-community/netinfo";
-
 import { ContentRejectedError } from "@/mockApi/chat/mockChatBackend";
 import { getConversationBackend } from "@/mockApi/chat/chatBackendRegistry";
 import { createSqliteChatStore } from "@/features/chat/storage/chatDatabase";
@@ -109,13 +107,10 @@ export async function enqueueMessage(
  * dedupes by clientId resolves it to a single message no matter how many
  * times this runs.
  *
- * No-ops while offline, leaving queued messages Pending (clock icon) instead
- * of reaching the backend — mockChatConnection's own reconcile() picks them
- * up once NetInfo reports reconnection.
- *
- * Also honors the debug-only forced-offline override (see
- * debugNetworkStore.ts) — the iOS Simulator has no real network radio to
- * toggle, so NetInfo alone can't be used to demo this scenario there.
+ * No-ops while offline (see debugNetworkStore.ts's forced-offline flag),
+ * leaving queued messages Pending (clock icon) instead of reaching the
+ * backend — mockChatConnection's own reconcile() picks them up once the
+ * flag reports reconnection.
  */
 export async function flushPendingMessages(
   conversationId: string,
@@ -124,12 +119,6 @@ export async function flushPendingMessages(
   await waitForDebugNetworkHydration();
 
   if (isDebugForcedOffline()) {
-    return;
-  }
-
-  const networkState = await NetInfo.fetch();
-
-  if (networkState.isConnected === false) {
     return;
   }
 

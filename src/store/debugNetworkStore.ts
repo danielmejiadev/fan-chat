@@ -2,11 +2,9 @@ import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import { create } from "zustand";
 
 /**
- * Dev-only override for "offline" that doesn't depend on NetInfo. The iOS
- * Simulator has no real Wi-Fi/Airplane Mode radio to toggle, so NetInfo's
- * isConnected can stay true regardless of what the host Mac's network is
- * doing — this store lets the offline failure scenarios be demoed reliably
- * on Simulator instead of depending on host network state.
+ * Dev-only override that's the sole source of truth for "offline" in this
+ * app — there's no real network connectivity check; every offline scenario
+ * is demoed by toggling this flag.
  *
  * Persisted so a force-quit while "offline" stays offline after reopening —
  * the force-quit-while-offline scenario the task requires would otherwise
