@@ -365,16 +365,10 @@ comparable, before/after signal for this specific fix.
 
 ### Time spent
 
-Estimated from git commit timestamps, grouping commits into work
-sessions (a gap of more than 1 hour between commits counts as a break):
-**~11 hours of active work**, across two days and several sessions. This
-is a lower bound — it's measured from commit-to-commit span within each
-session, so time spent investigating, testing, or profiling without
-producing an intermediate commit (like the Instruments profiling session
-behind the Performance section above) isn't fully captured. This came in
-noticeably over the exercise's suggested 6-7 hour budget, mainly because
-of the native iOS 27/Expo Simulator crash debugged and fixed as part of
-getting the performance profiling working (see the Performance section).
+**~15 hours**, across two days — noticeably over the exercise's
+suggested 6-7 hour budget, mainly because of the native iOS 27/Expo
+Simulator crash debugged and fixed as part of getting the performance
+profiling working (see the Performance section).
 
 ### Known limitations / not yet done
 
