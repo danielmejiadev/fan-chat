@@ -103,10 +103,11 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
   `Active`) and a "Restore purchase" flow.
 - **Dark mode** — follows the OS automatically (NativeWind `dark:`
   variant), no manual in-app toggle.
-- **Debug mode** (`__DEV__` only) — `ChatDebugMenu` to force the two chat
-  failure modes on demand ("Drop next response", "Reject next message")
-  and simulate incoming messages; `DemoResetButton` to wipe all local
-  data and start a recording from a clean state.
+- **Demo controls** (always visible, every build — see "Demo controls"
+  below for the full list) — `ChatDebugMenu` to force chat failure modes,
+  go offline, simulate incoming messages and clear subscription access on
+  demand; `DemoResetButton` to wipe all local data and start a recording
+  from a clean state.
 - **Responsive desktop/mobile layout** — a `DesktopSidebar` +
   multi-column view on wide screens, a `MobileTabBar` + full-screen view
   on narrow ones, switching at runtime (`useIsDesktopLayout`). Only
