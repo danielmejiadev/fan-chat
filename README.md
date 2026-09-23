@@ -293,14 +293,35 @@ real endpoints — `chatService.ts`, `giftPurchaseService.ts` and
 
 ### Demo controls
 
-- **`ChatDebugMenu`** (floating bug icon in a chat thread, `__DEV__` only) —
-  "Drop next response" and "Reject next message" force the two chat failure
-  modes on demand; "Simulate 4 incoming messages" adds messages from the
-  other participant, useful combined with going offline first.
+Both controls below are **always visible**, in every build — not gated
+behind `__DEV__` or any environment flag. There's no other way to reach
+the required failure/recovery scenarios by tapping a mock app with no
+real backend, so they're a deliberate part of the demo, not a debug leftover
+left in by mistake.
+
+- **`ChatDebugMenu`** (floating bug icon in a chat thread) opens a modal
+  with:
+  - **"Go offline" / "Go back online"** — forces every message send to
+    stay queued instead of reaching the backend (stand-in for Airplane
+    Mode, since the Simulator has no real network toggle); toggling back
+    reconnects and flushes the queue.
+  - **"Drop next response"** — the next send is accepted by the backend
+    but its confirmation never arrives, so the message appears stuck
+    Pending — used to test retry-without-duplicate behavior.
+  - **"Reject next message (non-recoverable)"** — the next send is
+    refused outright by the backend, with no retry offered (resending the
+    same text would just fail again).
+  - **"Simulate 4 incoming messages"** — pushes 4 canned messages from the
+    other participant straight into the mock backend; meant to be
+    combined with "Go offline" to test recovery-on-reconnect.
+  - **"Clear subscription access"** — simulates a reinstall: wipes local
+    fan access while keeping the store purchase record, so the paywall's
+    "Restore purchase" flow has something to find.
 - **`DemoResetButton`** (sidebar on desktop, floating button on the
-  conversation list on mobile — always visible) — wipes every
-  chat/purchase/subscription table and drops the in-memory mock backends,
-  so each recording starts clean.
+  conversation list on mobile) — wipes every chat/purchase/subscription
+  table and resets every in-memory mock backend, then navigates back to
+  the conversation list, so each recording starts from a clean, reseeded
+  state.
 
 ### Technical implementation notes
 
