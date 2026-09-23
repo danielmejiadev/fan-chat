@@ -1,5 +1,21 @@
 # fan-chat
 
+## Contents
+
+- [Platform tested](#platform-tested)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Run the project](#run-the-project)
+- [Other commands](#other-commands)
+- [Architecture](#architecture)
+- [Demo controls](#demo-controls)
+- [Technical implementation notes](#technical-implementation-notes)
+- [Resuming a large media upload](#resuming-a-large-media-upload)
+- [App Store / Google Play rules](#app-store--google-play-rules-relevant-to-creator-content-and-payments)
+- [Performance](#performance-profiling-the-50k-message-conversation)
+- [Time spent](#time-spent)
+- [Known limitations / not yet done](#known-limitations--not-yet-done)
+
 ## Platform tested
 
 Tested on **iOS Simulator — iPhone 18 Pro, iOS 27.0**. Android was not
@@ -60,13 +76,19 @@ pnpm test       # Jest
 Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
 Three features — **chat**, **gifts** and **subscriptions** — each run the
-same five layers, and every dependency between them points in one direction
-only (UI → Hooks → Services → Storage / mockApi). That's what makes the
-retry/idempotency logic testable in Jest without a real device or network:
-swap the bottom layer for an in-memory fake, keep everything above it
-unchanged. Gifts and subscriptions also share one purchase ledger
-underneath them (`src/features/purchases/`), so a one-off tip and a
-recurring membership are recorded the same way and only diverge above it.
+same five layers:
+
+```
+UI → Hooks → Services → Storage / mockApi
+```
+
+- Every dependency points in one direction only, which is what makes the
+  retry/idempotency logic testable in Jest without a real device or
+  network: swap the bottom layer for an in-memory fake, keep everything
+  above it unchanged.
+- Gifts and subscriptions share one purchase ledger underneath them
+  (`src/features/purchases/`), so a one-off tip and a recurring membership
+  are recorded the same way and only diverge above it.
 
 ### UI — `src/app/`, `src/features/*/components/`, `src/components/`
 
@@ -126,9 +148,9 @@ inside the modal itself.
 
 ### Hooks — `src/features/*/hooks/`, `src/hooks/`
 
-The client-side glue layer: local React state and optimistic updates. No
-React Query anywhere — there's no remote fetch to cache, since the mock
-backend is synchronous local storage plus in-memory state.
+The client-side glue layer: local React state and optimistic updates.
+**No React Query anywhere** — there's no remote fetch to cache, since the
+mock backend is synchronous local storage plus in-memory state.
 
 - **`useChatThread`** composes `useMessages` (one subscription, one
   stale-read guard, one chronologically sorted array — confirmed messages
@@ -151,14 +173,18 @@ backend is synchronous local storage plus in-memory state.
 ### Services — `src/features/*/services/`, `src/services/`
 
 `chatService.ts`, `giftPurchaseService.ts` and `subscriptionService.ts`
-hold every rule that actually matters: writing a message to the local
-outbox *before* any network attempt, deduping retries by `clientId`, and
-keeping a subscription's purchase result separate from its backend
-entitlement confirmation. Both purchase services build on the shared
-`purchaseService.ts` (`src/features/purchases/services/`), which owns
-`initiatePurchase` (idempotent per product) and `updatePurchaseStatus`.
-`resetDemoData.ts` lives directly under `src/services/` instead of inside
-one feature, because it spans chat, gifts and subscriptions together.
+hold every rule that actually matters:
+
+- Writing a message to the local outbox *before* any network attempt.
+- Deduping retries by `clientId`.
+- Keeping a subscription's purchase result separate from its backend
+  entitlement confirmation.
+
+Both purchase services build on the shared `purchaseService.ts`
+(`src/features/purchases/services/`), which owns `initiatePurchase`
+(idempotent per product) and `updatePurchaseStatus`. `resetDemoData.ts`
+lives directly under `src/services/` instead of inside one feature,
+because it spans chat, gifts and subscriptions together.
 
 This is also the only layer with test-only escape hatches
 (`setChatServiceStoreForTests`, `setPurchaseServiceStoreForTests`,
@@ -412,9 +438,13 @@ beyond what was explicitly required but that rounded out the app.
 
 ### Known limitations / not yet done
 
-Tracked in detail in `PLAN.md`'s phase checklists — pulled out here so
-they're not missed:
+Tracked in detail in `PLAN.md`'s phase checklists:
 
-- The design kit (colors, typography, dark mode) has been verified via
-  typecheck/lint/tests/`expo export`, but not visually reviewed on screen
-  against the Figma source.
+- **Native iOS scene-lifecycle fix isn't committed.** Running a Release
+  build on iOS 27 required adding a `UIWindowSceneDelegate` in
+  `ios/fanchat/AppDelegate.swift` + `Info.plist`. Those files live under
+  the gitignored `ios/` directory, so the fix is lost on a clean
+  `expo prebuild --clean` — it isn't yet wrapped in an Expo config plugin.
+- **Performance profiling is Simulator-only** (see "Performance" above),
+  not a physical-device measurement.
+- **Android is untested** (see "Platform tested" above).
