@@ -58,6 +58,26 @@ export function resetSubscriptionServiceStore(): void {
   defaultStore = null;
 }
 
+/**
+ * Coalesces concurrent calls for the same key into one shared promise, so a
+ * second call while the first is still running returns the same in-flight
+ * result instead of starting a duplicate operation.
+ */
+function dedupeInFlight<T>(
+  inFlight: Map<string, Promise<T>>,
+  key: string,
+  start: () => Promise<T>,
+): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const promise = start().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
 const inFlightStartsByProductId = new Map<string, Promise<StorePurchase>>();
 const inFlightRestoresByProductId = new Map<string, Promise<StorePurchase | null>>();
 const confirmedPurchaseIds = new Set<string>();
@@ -85,21 +105,9 @@ export async function hydrateSubscription(userId: string): Promise<void> {
  * of starting a new purchase flow.
  */
 export function startSubscriptionPurchase(): Promise<StorePurchase> {
-  const existingStart = inFlightStartsByProductId.get(FAN_PRODUCT_ID);
-  if (existingStart !== undefined) {
-    return existingStart;
-  }
-
-  const startPromise = initiatePurchase(
-    FAN_PRODUCT_ID,
-    FAN_PRODUCT_PRICE_CENTS,
-    FAN_PRODUCT_CURRENCY,
-  ).finally(() => {
-    inFlightStartsByProductId.delete(FAN_PRODUCT_ID);
-  });
-
-  inFlightStartsByProductId.set(FAN_PRODUCT_ID, startPromise);
-  return startPromise;
+  return dedupeInFlight(inFlightStartsByProductId, FAN_PRODUCT_ID, () =>
+    initiatePurchase(FAN_PRODUCT_ID, FAN_PRODUCT_PRICE_CENTS, FAN_PRODUCT_CURRENCY),
+  );
 }
 
 /**
@@ -128,17 +136,9 @@ export async function resolveSubscriptionPurchase(
  * way.
  */
 export function restoreSubscription(userId: string): Promise<StorePurchase | null> {
-  const existingRestore = inFlightRestoresByProductId.get(FAN_PRODUCT_ID);
-  if (existingRestore !== undefined) {
-    return existingRestore;
-  }
-
-  const restorePromise = runSubscriptionRestore(userId).finally(() => {
-    inFlightRestoresByProductId.delete(FAN_PRODUCT_ID);
-  });
-
-  inFlightRestoresByProductId.set(FAN_PRODUCT_ID, restorePromise);
-  return restorePromise;
+  return dedupeInFlight(inFlightRestoresByProductId, FAN_PRODUCT_ID, () =>
+    runSubscriptionRestore(userId),
+  );
 }
 
 async function runSubscriptionRestore(_userId: string): Promise<StorePurchase | null> {
@@ -179,19 +179,9 @@ export function confirmSubscription(
     return Promise.resolve();
   }
 
-  const existingConfirmation = inFlightConfirmationsByPurchaseId.get(purchaseId);
-  if (existingConfirmation !== undefined) {
-    return existingConfirmation;
-  }
-
-  const confirmationPromise = runSubscriptionConfirmation(userId, purchaseId, delayMs).finally(
-    () => {
-      inFlightConfirmationsByPurchaseId.delete(purchaseId);
-    },
+  return dedupeInFlight(inFlightConfirmationsByPurchaseId, purchaseId, () =>
+    runSubscriptionConfirmation(userId, purchaseId, delayMs),
   );
-
-  inFlightConfirmationsByPurchaseId.set(purchaseId, confirmationPromise);
-  return confirmationPromise;
 }
 
 async function runSubscriptionConfirmation(
