@@ -143,12 +143,24 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
     above) — the layout logic itself is platform-agnostic, but unverified
     on Android/web.
 
-Three features — **chat**, **gifts** and **subscriptions** — each run the
-same five layers:
+### Layers architecture
 
 ```
 UI → Hooks → Services → Storage / mockApi
 ```
+
+Three features — **chat**, **gifts** and **subscriptions** — each run
+through these same layers. Every layer is its own abstraction boundary,
+responsible for one thing only:
+
+- **UI** — render only, no business logic, no direct storage/network
+  calls.
+- **Hooks** — client-side glue: local React state, optimistic updates,
+  wiring a screen to the layer below it.
+- **Services** — the actual business rules (idempotency, retries,
+  reconciliation order).
+- **Storage / mockApi** — persistence (SQLite) and the stand-in backend,
+  swappable without the layers above noticing.
 
 - Every dependency points in one direction only, which is what makes the
   retry/idempotency logic testable in Jest without a real device or
