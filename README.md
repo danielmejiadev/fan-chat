@@ -153,10 +153,6 @@ another, and it's what makes the layers below UI swappable in tests
 (a real SQLite store for the app, an in-memory fake for Jest) without
 touching a single component.
 
-```
-UI → Hooks → Services → Storage / mockApi
-```
-
 - **UI** — render only, no business logic, no direct storage/network
   calls.
 - **Hooks** — client-side glue: local React state, optimistic updates,
