@@ -8,9 +8,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { GiftRow } from "@/features/chat/components/chatDetail/GiftRow";
 import { getMessageDeliveryTick } from "@/features/chat/utils/getMessageDeliveryTick";
+import { isGiftMessage } from "@/features/chat/utils/isGiftMessage";
 import { MessageFailureReason, MessageStatus, type Message } from "@/features/chat/types";
-
-const GIFT_MESSAGE_PATTERN = /sent a \$[\d.]+ gift/i;
 
 interface MessageBubbleProps {
   message: Message;
@@ -27,7 +26,7 @@ function MessageBubbleComponent({
 }: MessageBubbleProps) {
   const isOwnMessage = message.clientId !== null;
   const isRejected = message.failureReason === MessageFailureReason.Rejected;
-  const isGiftMessage = GIFT_MESSAGE_PATTERN.test(message.text);
+  const isGift = isGiftMessage(message.text);
   const deliveryTick = isOwnMessage ? getMessageDeliveryTick(message) : null;
 
   return (
@@ -47,10 +46,8 @@ function MessageBubbleComponent({
             "border border-error": message.status === MessageStatus.Failed,
           })}
         >
-          {isGiftMessage && <GiftRow text={message.text} />}
-          {!isGiftMessage && (
-            <Text className="text-body text-foreground-primary">{message.text}</Text>
-          )}
+          {isGift && <GiftRow text={message.text} />}
+          {!isGift && <Text className="text-body text-foreground-primary">{message.text}</Text>}
           <View className="mt-2.5 flex-row items-center gap-1">
             <Text className="text-caption text-foreground-date">
               {format(message.createdAt, "h:mm a")}

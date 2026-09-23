@@ -1,6 +1,7 @@
 import { View } from "react-native";
 
 import { DemoResetButton } from "@/components/DemoResetButton";
+import { Avatar } from "@/components/ui/Avatar";
 import { Text } from "@/components/ui/Text";
 import { SidebarItem } from "@/components/layout/SidebarItem";
 
@@ -25,9 +26,7 @@ export function DesktopSidebar() {
         <DemoResetButton variant="sidebar" />
       </View>
       <View className="flex-row items-center gap-2 px-2">
-        <View className="h-8 w-8 items-center justify-center rounded-full bg-surface-muted">
-          <Text className="text-caption font-sans-medium text-foreground-primary">ES</Text>
-        </View>
+        <Avatar name="Ethan Shoots" size={32} tint="#F5F5F5" />
         <View className="flex-1">
           <Text className="text-h5 font-sans-medium text-foreground-primary">Ethan Shoots</Text>
           <Text className="text-caption text-foreground-secondary">@ethan_shoots</Text>

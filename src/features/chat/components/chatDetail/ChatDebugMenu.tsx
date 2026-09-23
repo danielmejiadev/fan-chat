@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
+import { DebugMenuAction } from "@/features/chat/components/chatDetail/DebugMenuAction";
 import {
   dropNextResponse,
   rejectNextMessage,
@@ -63,6 +64,33 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
     setIsOpen(false);
   };
 
+  const debugActions = [
+    {
+      title: "Drop next response",
+      description:
+        "Next send is accepted by the backend but its confirmation never arrives — send a message, watch it fail, then retry to confirm no duplicate is created.",
+      onPress: handleDropNextResponse,
+    },
+    {
+      title: "Simulate 4 incoming messages",
+      description:
+        "Adds 4 messages from the other participant — go offline first to see them recovered on reconnect.",
+      onPress: handleSimulateIncoming,
+    },
+    {
+      title: "Reject next message (non-recoverable)",
+      description:
+        "Next send is refused outright by the backend — no retry offered, since resending the same text would fail again.",
+      onPress: handleRejectNextMessage,
+    },
+    {
+      title: "Clear subscription access",
+      description:
+        'Simulates a reinstall: wipes local fan access but keeps the store purchase record, so "Restore purchase" in the paywall has something to find.',
+      onPress: handleClearSubscriptionAccess,
+    },
+  ];
+
   return (
     <>
       <Pressable
@@ -79,7 +107,10 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
         <Icon
           name={isForcedOffline ? "cloud-offline-outline" : "bug-outline"}
           size={22}
-          className="text-white"
+          className={clsx({
+            "text-error-foreground": !isForcedOffline,
+            "text-white": isForcedOffline,
+          })}
         />
       </Pressable>
       <Modal
@@ -119,58 +150,9 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
                 Toggle off to reconnect and flush the queue.
               </Text>
             </Pressable>
-            <Pressable
-              onPress={handleDropNextResponse}
-              accessibilityRole="button"
-              className="rounded-lg border border-border-light px-4 py-3"
-            >
-              <Text className="text-body font-sans-medium text-foreground-primary">
-                Drop next response
-              </Text>
-              <Text className="text-caption text-foreground-secondary">
-                Next send is accepted by the backend but its confirmation never arrives — send a
-                message, watch it fail, then retry to confirm no duplicate is created.
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleSimulateIncoming}
-              accessibilityRole="button"
-              className="rounded-lg border border-border-light px-4 py-3"
-            >
-              <Text className="text-body font-sans-medium text-foreground-primary">
-                Simulate 4 incoming messages
-              </Text>
-              <Text className="text-caption text-foreground-secondary">
-                Adds 4 messages from the other participant — go offline first to see them recovered
-                on reconnect.
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleRejectNextMessage}
-              accessibilityRole="button"
-              className="rounded-lg border border-border-light px-4 py-3"
-            >
-              <Text className="text-body font-sans-medium text-foreground-primary">
-                Reject next message (non-recoverable)
-              </Text>
-              <Text className="text-caption text-foreground-secondary">
-                Next send is refused outright by the backend — no retry offered, since resending the
-                same text would fail again.
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleClearSubscriptionAccess}
-              accessibilityRole="button"
-              className="rounded-lg border border-border-light px-4 py-3"
-            >
-              <Text className="text-body font-sans-medium text-foreground-primary">
-                Clear subscription access
-              </Text>
-              <Text className="text-caption text-foreground-secondary">
-                Simulates a reinstall: wipes local fan access but keeps the store purchase record,
-                so &quot;Restore purchase&quot; in the paywall has something to find.
-              </Text>
-            </Pressable>
+            {debugActions.map((action) => (
+              <DebugMenuAction key={action.title} {...action} />
+            ))}
           </Pressable>
         </Pressable>
       </Modal>

@@ -95,6 +95,7 @@ module.exports = {
       borderRadius: {
         bubble: "16px",
         nav: "28px",
+        control: "10px",
       },
     },
   },

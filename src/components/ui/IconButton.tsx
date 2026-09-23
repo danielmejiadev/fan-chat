@@ -4,18 +4,14 @@ import { clsx } from "clsx";
 
 import { Icon } from "@/components/ui/Icon";
 
-const DEFAULT_BG_CLASSNAME = {
-  ghost: "bg-transparent",
-  muted: "bg-surface-muted shadow-inset-primary",
-  primary: "bg-primary border border-primary shadow-inset-xs",
-  gift: "bg-surface-muted shadow-inset-primary",
-};
-
-const DEFAULT_ICON_CLASSNAME = {
-  ghost: "text-foreground-primary",
-  muted: "text-ring",
-  primary: "text-[#FAFAFA]",
-  gift: "text-ring",
+const VARIANT_CLASSNAMES = {
+  ghost: { bg: "bg-transparent", icon: "text-foreground-primary" },
+  muted: { bg: "bg-surface-muted shadow-inset-primary", icon: "text-ring" },
+  primary: {
+    bg: "bg-primary border border-primary shadow-inset-xs",
+    icon: "text-primary-foreground",
+  },
+  gift: { bg: "bg-surface-muted shadow-inset-primary", icon: "text-ring" },
 };
 
 interface IconButtonProps {
@@ -40,12 +36,12 @@ export function IconButton({
       accessibilityLabel={accessibilityLabel}
       hitSlop={6}
       className={clsx(
-        "h-9 w-9 items-center justify-center rounded-[10px]",
-        DEFAULT_BG_CLASSNAME[variant],
+        "h-9 w-9 items-center justify-center rounded-control",
+        VARIANT_CLASSNAMES[variant].bg,
         className,
       )}
     >
-      <Icon name={name} size={16} className={DEFAULT_ICON_CLASSNAME[variant]} />
+      <Icon name={name} size={16} className={VARIANT_CLASSNAMES[variant].icon} />
     </Pressable>
   );
 }

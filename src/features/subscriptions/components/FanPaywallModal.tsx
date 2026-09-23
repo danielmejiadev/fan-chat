@@ -1,7 +1,7 @@
 import { Modal, Pressable, View } from "react-native";
-import { clsx } from "clsx";
 
 import { IconButton } from "@/components/ui/IconButton";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Text } from "@/components/ui/Text";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
 import {
@@ -28,6 +28,7 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
   const isBusy = purchaseState === "purchasing" || purchaseState === "restoring";
   const isAlreadyActive = status === SubscriptionStatus.Active;
   const statusMessage = getFanStatusMessage(purchaseState, status);
+  const showPrimaryActions = !isAlreadyActive && !isAwaitingOutcome;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -60,19 +61,13 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
             <Text className="mt-4 text-body text-foreground-primary">{statusMessage}</Text>
           )}
 
-          {!isAlreadyActive && !isAwaitingOutcome && (
-            <Pressable
+          {showPrimaryActions && (
+            <PrimaryButton
+              label={getFanPurchaseButtonLabel(purchaseState)}
               onPress={() => void purchase()}
-              accessibilityRole="button"
               disabled={isBusy}
-              className={clsx("mt-5 h-11 items-center justify-center rounded-[10px] bg-primary", {
-                "opacity-60": isBusy,
-              })}
-            >
-              <Text className="text-h5 font-sans-medium text-white">
-                {getFanPurchaseButtonLabel(purchaseState)}
-              </Text>
-            </Pressable>
+              className="mt-5"
+            />
           )}
 
           {isAwaitingOutcome && (
@@ -84,21 +79,23 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
                 <Pressable
                   onPress={() => void resolveOutcome("succeed")}
                   accessibilityRole="button"
-                  className="rounded-[10px] bg-primary px-4 py-2"
+                  className="rounded-control bg-primary px-4 py-2"
                 >
-                  <Text className="text-body font-sans-medium text-white">Success</Text>
+                  <Text className="text-body font-sans-medium text-primary-foreground">
+                    Success
+                  </Text>
                 </Pressable>
                 <Pressable
                   onPress={() => void resolveOutcome("cancel")}
                   accessibilityRole="button"
-                  className="rounded-[10px] border border-border-light px-4 py-2"
+                  className="rounded-control border border-border-light px-4 py-2"
                 >
                   <Text className="text-body font-sans-medium text-foreground-primary">Cancel</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => void resolveOutcome("fail")}
                   accessibilityRole="button"
-                  className="rounded-[10px] border border-border-light px-4 py-2"
+                  className="rounded-control border border-border-light px-4 py-2"
                 >
                   <Text className="text-body font-sans-medium text-foreground-primary">Fail</Text>
                 </Pressable>
@@ -106,7 +103,7 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
             </View>
           )}
 
-          {!isAlreadyActive && !isAwaitingOutcome && (
+          {showPrimaryActions && (
             <Pressable
               onPress={() => void restore()}
               accessibilityRole="button"

@@ -1,8 +1,20 @@
 import { View } from "react-native";
+import type { Ionicons } from "@expo/vector-icons";
 
 import { Text } from "@/components/ui/Text";
 import { PaymentMethodChip } from "@/features/gifts/components/PaymentMethodChip";
 import type { PaymentMethod } from "@/features/purchases/types";
+
+const PAYMENT_METHODS: {
+  value: PaymentMethod;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { value: "card", label: "Card", icon: "card-outline" },
+  { value: "apple", label: "Apple Pay", icon: "logo-apple" },
+  { value: "paypal", label: "PayPal", icon: "logo-paypal" },
+  { value: "crypto", label: "Crypto", icon: "logo-bitcoin" },
+];
 
 interface PaymentMethodSelectorProps {
   selectedMethod: PaymentMethod;
@@ -14,30 +26,15 @@ export function PaymentMethodSelector({ selectedMethod, onSelect }: PaymentMetho
     <View className="gap-4">
       <Text className="text-h5 font-sans-medium text-foreground-primary">Payment method</Text>
       <View className="flex-row flex-wrap gap-2">
-        <PaymentMethodChip
-          label="Card"
-          icon="card-outline"
-          isSelected={selectedMethod === "card"}
-          onPress={() => onSelect("card")}
-        />
-        <PaymentMethodChip
-          label="Apple Pay"
-          icon="logo-apple"
-          isSelected={selectedMethod === "apple"}
-          onPress={() => onSelect("apple")}
-        />
-        <PaymentMethodChip
-          label="PayPal"
-          icon="logo-paypal"
-          isSelected={selectedMethod === "paypal"}
-          onPress={() => onSelect("paypal")}
-        />
-        <PaymentMethodChip
-          label="Crypto"
-          icon="logo-bitcoin"
-          isSelected={selectedMethod === "crypto"}
-          onPress={() => onSelect("crypto")}
-        />
+        {PAYMENT_METHODS.map((method) => (
+          <PaymentMethodChip
+            key={method.value}
+            label={method.label}
+            icon={method.icon}
+            isSelected={selectedMethod === method.value}
+            onPress={() => onSelect(method.value)}
+          />
+        ))}
       </View>
     </View>
   );
