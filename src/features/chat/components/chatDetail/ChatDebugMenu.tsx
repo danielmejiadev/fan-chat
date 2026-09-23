@@ -168,7 +168,7 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
               </Text>
               <Text className="text-caption text-foreground-secondary">
                 Simulates a reinstall: wipes local fan access but keeps the store purchase record,
-                so "Restore purchase" in the paywall has something to find.
+                so &quot;Restore purchase&quot; in the paywall has something to find.
               </Text>
             </Pressable>
           </Pressable>

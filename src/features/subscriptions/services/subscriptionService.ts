@@ -158,19 +158,47 @@ async function runSubscriptionRestore(_userId: string): Promise<StorePurchase | 
   return { ...restorablePurchase, status: StorePurchaseStatus.Restored };
 }
 
+const inFlightConfirmationsByPurchaseId = new Map<string, Promise<void>>();
+
 /**
  * Confirms the subscription for a purchase against the mock backend.
- * Idempotent: a purchaseId already confirmed short-circuits without calling
- * the backend again, and the backend itself never schedules a second delay
- * for a purchaseId that's already pending or confirmed (see
- * mockSubscriptionBackend). The subscription is only ever set Active here —
- * never as a side effect of the purchase call itself.
+ * Idempotent against repeated events for the same purchaseId two ways: an
+ * already-confirmed purchaseId short-circuits without calling the backend
+ * again, and two concurrent calls for a purchaseId still in flight share the
+ * same promise instead of each calling the backend — otherwise both would
+ * pass the "already confirmed" check before either finishes and hit the
+ * backend twice. The subscription is only ever set Active here — never as a
+ * side effect of the purchase call itself.
  */
-export async function confirmSubscription(userId: string, purchaseId: string, delayMs?: number): Promise<void> {
+export function confirmSubscription(
+  userId: string,
+  purchaseId: string,
+  delayMs?: number,
+): Promise<void> {
   if (confirmedPurchaseIds.has(purchaseId)) {
-    return;
+    return Promise.resolve();
   }
 
+  const existingConfirmation = inFlightConfirmationsByPurchaseId.get(purchaseId);
+  if (existingConfirmation !== undefined) {
+    return existingConfirmation;
+  }
+
+  const confirmationPromise = runSubscriptionConfirmation(userId, purchaseId, delayMs).finally(
+    () => {
+      inFlightConfirmationsByPurchaseId.delete(purchaseId);
+    },
+  );
+
+  inFlightConfirmationsByPurchaseId.set(purchaseId, confirmationPromise);
+  return confirmationPromise;
+}
+
+async function runSubscriptionConfirmation(
+  userId: string,
+  purchaseId: string,
+  delayMs?: number,
+): Promise<void> {
   useSubscriptionStore.getState().setStatus(SubscriptionStatus.PendingConfirmation, purchaseId);
   await resolveSubscriptionStore().setSubscription({
     userId,
@@ -180,10 +208,6 @@ export async function confirmSubscription(userId: string, purchaseId: string, de
   });
 
   const confirmation = await getSubscriptionBackend().confirmSubscription(purchaseId, delayMs);
-
-  if (confirmedPurchaseIds.has(purchaseId)) {
-    return;
-  }
 
   confirmedPurchaseIds.add(purchaseId);
   useSubscriptionStore.getState().setStatus(SubscriptionStatus.Active, confirmation.purchaseId);
@@ -199,6 +223,7 @@ export async function confirmSubscription(userId: string, purchaseId: string, de
 export function resetSubscriptionServiceState(): void {
   inFlightStartsByProductId.clear();
   inFlightRestoresByProductId.clear();
+  inFlightConfirmationsByPurchaseId.clear();
   confirmedPurchaseIds.clear();
 }
 

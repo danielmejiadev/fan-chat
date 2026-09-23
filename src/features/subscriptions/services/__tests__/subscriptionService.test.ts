@@ -96,8 +96,9 @@ describe("subscriptionService failure", () => {
 describe("subscriptionService: a failed purchase never clears an active subscription", () => {
   it("keeps the subscription active after an unrelated failed purchase attempt", async () => {
     const successfulPurchase = await purchaseWithOutcome("succeed");
+    const confirmPromise = confirmSubscription(userId, successfulPurchase.purchaseId);
     await jest.advanceTimersByTimeAsync(DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS);
-    await confirmSubscription(userId, successfulPurchase.purchaseId);
+    await confirmPromise;
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Active);
 
     resetSubscriptionServiceState();
@@ -111,8 +112,9 @@ describe("subscriptionService: a failed purchase never clears an active subscrip
 describe("subscriptionService restore", () => {
   it("restores the subscription when a previous successful purchase exists", async () => {
     const originalPurchase = await purchaseWithOutcome("succeed");
+    const firstConfirmPromise = confirmSubscription(userId, originalPurchase.purchaseId);
     await jest.advanceTimersByTimeAsync(DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS);
-    await confirmSubscription(userId, originalPurchase.purchaseId);
+    await firstConfirmPromise;
     resetSubscriptionStore();
     resetSubscriptionServiceState();
 
@@ -120,8 +122,9 @@ describe("subscriptionService restore", () => {
     expect(restoredPurchase).not.toBeNull();
     expect(restoredPurchase?.status).toBe(StorePurchaseStatus.Restored);
 
+    const secondConfirmPromise = confirmSubscription(userId, restoredPurchase!.purchaseId);
     await jest.advanceTimersByTimeAsync(DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS);
-    await confirmSubscription(userId, restoredPurchase!.purchaseId);
+    await secondConfirmPromise;
 
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Active);
   });
