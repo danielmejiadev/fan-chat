@@ -75,6 +75,44 @@ pnpm test       # Jest
 
 Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
+### Features implemented
+
+- **Chat**
+  - Send a text message, with optimistic UI (Pending → Sent → Confirmed
+    delivery ticks, WhatsApp-style).
+  - Retry a failed message from the bubble itself, without losing its
+    content or position in the thread.
+  - Verify a message actually reached the other side — the Confirmed
+    state only lands after the mock backend's own confirmation event,
+    never optimistically assumed.
+  - Offline handling: an `OfflineBanner` while connectivity is down
+    (`@react-native-community/netinfo`), pending messages queue instead of
+    failing outright, and everything reconciles automatically on
+    reconnect/app-foreground.
+  - Receive incoming messages from the other participant in real time
+    (event-driven, no polling).
+  - Scroll a 50,000-message thread with keyset pagination
+    (`@shopify/flash-list`), reachable from the normal chat list.
+  - Search conversations (`ConversationSearch`).
+- **Gifts** — send a one-off tip from inside a thread (`GiftModal`:
+  amount, payment method, subtotal/fees/total), resolved instantly, with
+  a `GiftRow` system message dropped into the thread on confirmation.
+- **Subscriptions** — become a paying "Fan" of a creator
+  (`FanPaywallModal`, simulated payment sheet with Success/Cancel/Fail),
+  with a separate backend confirmation step (`PendingConfirmation` before
+  `Active`) and a "Restore purchase" flow.
+- **Dark mode** — follows the OS automatically (NativeWind `dark:`
+  variant), no manual in-app toggle.
+- **Debug mode** (`__DEV__` only) — `ChatDebugMenu` to force the two chat
+  failure modes on demand ("Drop next response", "Reject next message")
+  and simulate incoming messages; `DemoResetButton` to wipe all local
+  data and start a recording from a clean state.
+- **Responsive desktop/mobile layout** — a `DesktopSidebar` +
+  multi-column view on wide screens, a `MobileTabBar` + full-screen view
+  on narrow ones, switching at runtime (`useIsDesktopLayout`). Only
+  actually tested on the **iOS Simulator** (see "Platform tested" above),
+  but the layout logic itself is platform-agnostic.
+
 Three features — **chat**, **gifts** and **subscriptions** — each run the
 same five layers:
 
