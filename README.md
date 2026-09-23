@@ -145,13 +145,17 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
 ### Layers architecture
 
+Defined this way on purpose, to keep logic separated by layer instead of
+mixed together — a component should never carry business logic, a hook
+should never carry storage/network calls, and so on. Mixing them is what
+makes code hard to maintain: a bug fix in one layer can't leak into
+another, and it's what makes the layers below UI swappable in tests
+(a real SQLite store for the app, an in-memory fake for Jest) without
+touching a single component.
+
 ```
 UI → Hooks → Services → Storage / mockApi
 ```
-
-Three features — **chat**, **gifts** and **subscriptions** — each run
-through these same layers. Every layer is its own abstraction boundary,
-responsible for one thing only:
 
 - **UI** — render only, no business logic, no direct storage/network
   calls.
