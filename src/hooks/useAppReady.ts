@@ -5,6 +5,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { initializeAppDatabase } from "@/lib/database";
 import { useAppFonts } from "@/hooks/useAppFonts";
 import { ensurePerfTestMessagesSeeded } from "@/features/chat/services/perfTestSeed";
+import { hydrateSubscription } from "@/features/subscriptions/services/subscriptionService";
+import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
 import migrations from "../../drizzle/app/migrations";
 
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +41,10 @@ export function useAppReady(): UseAppReadyResult {
         // without delaying app startup (splash hide only waits on
         // migrationsSucceeded above).
         void ensurePerfTestMessagesSeeded();
+
+        // Fire-and-forget: loads any previously confirmed subscription so
+        // the header doesn't ask a returning fan to buy again.
+        void hydrateSubscription(CURRENT_FAN_ID);
       })
       .catch((error: Error) => {
         if (!isCancelled) {

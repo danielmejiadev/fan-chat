@@ -1,7 +1,6 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
 import { DemoResetButton } from "@/components/DemoResetButton";
-import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { SidebarItem } from "@/components/layout/SidebarItem";
 
@@ -23,13 +22,6 @@ export function DesktopSidebar() {
         </Text>
         <SidebarItem icon="chatbubble-ellipses-outline" label="Messages" isActive />
         <SidebarItem icon="notifications-outline" label="Notifications" badgeCount={3} />
-        <Pressable
-          accessibilityRole="button"
-          className="mt-4 flex-row items-center justify-center gap-2 rounded-[10px] bg-primary px-4 py-2.5"
-        >
-          <Icon name="add" size={16} className="text-[#FAFAFA]" />
-          <Text className="text-h5 font-sans-medium text-white">Become a Creator</Text>
-        </Pressable>
         <DemoResetButton variant="sidebar" />
       </View>
       <View className="flex-row items-center gap-2 px-2">

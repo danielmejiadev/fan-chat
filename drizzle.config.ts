@@ -1,7 +1,11 @@
 import type { Config } from "drizzle-kit";
 
 export default {
-  schema: ["./src/features/chat/storage/schema.ts", "./src/features/purchases/storage/schema.ts"],
+  schema: [
+    "./src/features/chat/storage/schema.ts",
+    "./src/features/purchases/storage/schema.ts",
+    "./src/features/subscriptions/storage/schema.ts",
+  ],
   out: "./drizzle/app",
   dialect: "sqlite",
   driver: "expo",

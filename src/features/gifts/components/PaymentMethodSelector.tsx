@@ -1,7 +1,7 @@
 import { View } from "react-native";
 
 import { Text } from "@/components/ui/Text";
-import { PaymentMethodChip } from "@/features/purchases/components/PaymentMethodChip";
+import { PaymentMethodChip } from "@/features/gifts/components/PaymentMethodChip";
 import type { PaymentMethod } from "@/features/purchases/types";
 
 interface PaymentMethodSelectorProps {

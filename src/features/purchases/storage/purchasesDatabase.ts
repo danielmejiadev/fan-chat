@@ -5,7 +5,7 @@ import { storePurchases } from "@/features/purchases/storage/schema";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
 import type { StorePurchase, StorePurchaseStatus } from "@/features/purchases/types";
 
-/** Wipes the purchases table — used by the demo's reset action, never in normal app flow. */
+/** Wipes the store purchases ledger — used by the demo's reset action, never in normal app flow. */
 export async function clearPurchasesData(): Promise<void> {
   const database = getAppDatabase();
 

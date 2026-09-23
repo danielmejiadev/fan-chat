@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { initiatePurchase, processPurchase } from "@/features/purchases/services/purchaseService";
+import { initiatePurchase } from "@/features/purchases/services/purchaseService";
+import { processGiftPurchase } from "@/features/gifts/services/giftPurchaseService";
 import { StorePurchaseStatus } from "@/features/purchases/types";
 
 export type GiftPurchaseState = "idle" | "pending" | "confirmed" | "failed" | "canceled";
@@ -23,7 +24,7 @@ export function useGiftPurchase(userId: string, productId: string) {
     setErrorMessage(null);
 
     const purchase = await initiatePurchase(productId, amountCents, "USD");
-    const processedPurchase = await processPurchase(purchase, userId);
+    const processedPurchase = await processGiftPurchase(purchase, userId);
 
     if (processedPurchase.status === StorePurchaseStatus.Canceled) {
       setState("canceled");

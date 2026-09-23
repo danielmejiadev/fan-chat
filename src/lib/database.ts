@@ -4,8 +4,9 @@ import { drizzle, type ExpoSQLiteDatabase } from "drizzle-orm/expo-sqlite";
 
 import * as chatSchema from "@/features/chat/storage/schema";
 import * as purchasesSchema from "@/features/purchases/storage/schema";
+import * as subscriptionsSchema from "@/features/subscriptions/storage/schema";
 
-const schema = { ...chatSchema, ...purchasesSchema };
+const schema = { ...chatSchema, ...purchasesSchema, ...subscriptionsSchema };
 
 let rawDatabase: SQLiteDatabase | null = null;
 let drizzleDatabase: ExpoSQLiteDatabase<typeof schema> | null = null;

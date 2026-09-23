@@ -1,8 +1,15 @@
-import { getPurchaseBackend } from "@/mockApi/purchases/purchaseBackendRegistry";
 import { createSqlitePurchaseStore } from "@/features/purchases/storage/purchasesDatabase";
 import type { PurchaseStore } from "@/features/purchases/storage/purchaseStore";
 import { StorePurchaseStatus, type StorePurchase } from "@/features/purchases/types";
 import { generateUuid } from "@/utils/generateUuid";
+
+/**
+ * The shared store-purchase ledger: a generic transaction record both the
+ * gifts and subscriptions features build on top of (see
+ * features/gifts/services/giftPurchaseService.ts and
+ * features/subscriptions/services/subscriptionService.ts for how each
+ * resolves a purchase against its own mock backend).
+ */
 
 let defaultStore: PurchaseStore | null = null;
 
@@ -58,14 +65,19 @@ export async function initiatePurchase(
   return purchase;
 }
 
-/** Sends a Pending purchase to the mock store and records its result. */
-export async function processPurchase(
-  purchase: StorePurchase,
-  userId: string,
-): Promise<StorePurchase> {
-  const resolvedPurchase = getPurchaseBackend().purchase(purchase, userId);
+/**
+ * Persists a resolved status for a purchase, independent of which backend
+ * produced it — each feature resolves against its own mock backend and
+ * reports the result back here.
+ */
+export async function updatePurchaseStatus(
+  purchaseId: string,
+  status: StorePurchaseStatus,
+): Promise<void> {
+  await resolveStore().updatePurchaseStatus(purchaseId, status);
+}
 
-  await resolveStore().updatePurchaseStatus(purchase.purchaseId, resolvedPurchase.status);
-
-  return resolvedPurchase;
+/** All purchases ever recorded for a product, oldest first — used to look up a restorable purchase. */
+export async function getPurchasesForProduct(productId: string): Promise<StorePurchase[]> {
+  return resolveStore().getPurchasesForProduct(productId);
 }

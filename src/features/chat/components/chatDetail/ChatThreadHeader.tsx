@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
+import { BecomeFanButton } from "@/features/subscriptions/components/BecomeFanButton";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
 interface ChatThreadHeaderProps {
@@ -48,6 +49,7 @@ export function ChatThreadHeader({ conversation }: ChatThreadHeaderProps) {
             {conversation.participantHandle}
           </Text>
         </View>
+        <BecomeFanButton className="px-3 py-1.5" />
         {isDesktop && <Icon name="ellipsis-vertical" size={16} className="text-foreground-zinc" />}
       </View>
     </View>

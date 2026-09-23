@@ -20,3 +20,10 @@ CREATE TABLE `store_purchases` (
 	`status` text NOT NULL,
 	`createdAt` integer NOT NULL
 );
+--> statement-breakpoint
+CREATE TABLE `subscriptions` (
+	`userId` text PRIMARY KEY NOT NULL,
+	`status` text NOT NULL,
+	`purchaseId` text,
+	`updatedAt` integer NOT NULL
+);

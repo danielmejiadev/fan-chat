@@ -2,7 +2,7 @@ import { Pressable, View } from "react-native";
 import { clsx } from "clsx";
 
 import { Text } from "@/components/ui/Text";
-import { formatUsdFromCents, GIFT_AMOUNT_CENTS } from "@/features/purchases/constants/giftAmounts";
+import { formatUsdFromCents, GIFT_AMOUNT_CENTS } from "@/features/gifts/constants/giftAmounts";
 
 interface GiftAmountSelectorProps {
   selectedAmountCents: number;

@@ -13,7 +13,7 @@ import { CURRENT_FAN_ID, getConversationById } from "@/features/chat/constants/m
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import type { Message } from "@/features/chat/types";
 import { useIsOffline } from "@/hooks/useIsOffline";
-import { GiftModal } from "@/features/purchases/components/GiftModal";
+import { GiftModal } from "@/features/gifts/components/GiftModal";
 
 interface ThreadPaneProps {
   conversationId: string;

@@ -2,7 +2,9 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * The result of the mock store flow, keyed by purchaseId so repeated taps on
- * "Pay" for the same in-flight purchase cannot duplicate it.
+ * "Pay" for the same in-flight purchase cannot duplicate it. Shared ledger
+ * both gifts and subscriptions write to — see features/gifts and
+ * features/subscriptions for the domain-specific flows built on top of it.
  */
 export const storePurchases = sqliteTable("store_purchases", {
   purchaseId: text("purchaseId").primaryKey(),

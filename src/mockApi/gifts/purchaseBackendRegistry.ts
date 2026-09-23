@@ -1,5 +1,5 @@
-import { createMockPurchaseBackend } from "@/mockApi/purchases/mockPurchaseBackend";
-import type { MockPurchaseBackend } from "@/mockApi/purchases/mockPurchaseBackend";
+import { createMockPurchaseBackend } from "@/mockApi/gifts/mockPurchaseBackend";
+import type { MockPurchaseBackend } from "@/mockApi/gifts/mockPurchaseBackend";
 
 let purchaseBackend: MockPurchaseBackend | null = null;
 

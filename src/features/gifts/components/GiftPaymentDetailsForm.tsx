@@ -4,8 +4,8 @@ import { clsx } from "clsx";
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
 import { TextInput } from "@/components/ui/TextInput";
-import type { GiftPurchaseState } from "@/features/purchases/hooks/useGiftPurchase";
-import { getPayButtonLabel } from "@/features/purchases/utils/payButtonLabel";
+import type { GiftPurchaseState } from "@/features/gifts/hooks/useGiftPurchase";
+import { getPayButtonLabel } from "@/features/gifts/utils/payButtonLabel";
 
 interface GiftPaymentDetailsFormProps {
   email: string;

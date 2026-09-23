@@ -7,13 +7,13 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { IconButton } from "@/components/ui/IconButton";
 import type { Conversation } from "@/features/chat/constants/mockConversations";
 import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
-import { formatUsdFromCents } from "@/features/purchases/constants/giftAmounts";
-import { GiftAmountSelector } from "@/features/purchases/components/GiftAmountSelector";
-import { GiftModalHeader } from "@/features/purchases/components/GiftModalHeader";
-import { GiftPaymentDetailsForm } from "@/features/purchases/components/GiftPaymentDetailsForm";
-import { PaymentMethodSelector } from "@/features/purchases/components/PaymentMethodSelector";
-import { useGiftPurchase } from "@/features/purchases/hooks/useGiftPurchase";
-import { giftFormSchema, type GiftFormValues } from "@/features/purchases/utils/giftFormSchema";
+import { formatUsdFromCents } from "@/features/gifts/constants/giftAmounts";
+import { GiftAmountSelector } from "@/features/gifts/components/GiftAmountSelector";
+import { GiftModalHeader } from "@/features/gifts/components/GiftModalHeader";
+import { GiftPaymentDetailsForm } from "@/features/gifts/components/GiftPaymentDetailsForm";
+import { PaymentMethodSelector } from "@/features/gifts/components/PaymentMethodSelector";
+import { useGiftPurchase } from "@/features/gifts/hooks/useGiftPurchase";
+import { giftFormSchema, type GiftFormValues } from "@/features/gifts/utils/giftFormSchema";
 import { useIsDesktopLayout } from "@/hooks/useIsDesktopLayout";
 
 interface GiftModalProps {
