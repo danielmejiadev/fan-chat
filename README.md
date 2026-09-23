@@ -365,10 +365,9 @@ comparable, before/after signal for this specific fix.
 
 ### Time spent
 
-**~15 hours**, across two days — noticeably over the exercise's
-suggested 6-7 hour budget, mainly because of the native iOS 27/Expo
-Simulator crash debugged and fixed as part of getting the performance
-profiling working (see the Performance section).
+**~15 hours**, across two days — spent across several phases of
+implementation, verification, and testing, plus some functionality
+beyond what was explicitly required but that rounded out the app.
 
 ### Known limitations / not yet done
 
