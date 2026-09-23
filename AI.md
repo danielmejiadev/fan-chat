@@ -50,7 +50,9 @@ one UI slice):
    `subscriptionService.test.ts` covers each purchase transition (success +
    delayed confirmation, cancellation, failure, restore without
    duplicating, repeated taps, duplicate confirmation, cross-purchase
-   isolation) as a separate case.
+   isolation) as a separate case, and `purchaseService.test.ts` /
+   `giftPurchaseService.test.ts` cover the shared ledger and the gift flow
+   directly.
 2. Write the implementation.
 3. Run `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 4. Review the diff by hand for correctness and for AGENTS.md adherence

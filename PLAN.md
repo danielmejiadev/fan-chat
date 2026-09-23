@@ -125,11 +125,17 @@ business logic (idempotency, reconciliation order, retries).
   (`purchaseId` PK, `productId`, `priceCents`, `currency`, `status`,
   `createdAt`), insert-only.
 - [x] `purchaseService.ts`: `initiatePurchase(productId, priceCents, currency)`
-  idempotent per product — returns the existing `Pending` purchase instead
-  of creating a duplicate if one is already in flight — plus
-  `updatePurchaseStatus` and `getPurchasesForProduct`.
-- [x] Covered by tests: successful purchase, cancellation, failure, repeated
-  taps not duplicating a purchase, isolation between different purchases.
+  dedupes against an already-persisted `Pending` purchase for that product
+  — plus `updatePurchaseStatus` and `getPurchasesForProduct`. It has no
+  in-flight lock of its own (two truly concurrent calls before either has
+  persisted can each insert a row); guarding against a concurrent
+  double-tap is the caller's job — the UI disables its pay button while
+  pending, and `subscriptionService` additionally wraps it in its own
+  in-flight map for the fan-membership flow specifically.
+- [x] Covered by `services/__tests__/purchaseService.test.ts`: new-purchase
+  creation, dedup against a sequential repeated tap, a fresh purchase once
+  the prior one is no longer Pending, isolation between products, and
+  status updates.
 
 ## Phase 3 — Gifts, one-off tips (part of the 25% payments criterion)
 
@@ -146,8 +152,14 @@ business logic (idempotency, reconciliation order, retries).
   `idle/pending/confirmed/failed/canceled`). Opened from `MessageInput` →
   `ThreadPane`; on confirmation, drops a `GiftRow` system message into the
   thread via `onGiftSent`.
-- [x] Covered by tests (`giftPurchaseService.test.ts`): success, failure,
-  cancellation, repeated taps not duplicating a charge.
+- [x] Covered by `services/__tests__/giftPurchaseService.test.ts`:
+  resolving a purchase to `Succeeded` and persisting it in the shared
+  ledger, dedup against a sequential repeated tap on the same gift, and
+  two completed gifts for the same conversation staying independent
+  transactions rather than reusing one row. `mockPurchaseBackend.ts`
+  always resolves `Succeeded` with no simulated failure/cancellation path
+  (see the bullet above), so `useGiftPurchase`'s `failed`/`canceled`
+  states are currently unreachable through the UI and untested.
 
 ## Phase 4 — Subscriptions, recurring membership (part of the 25% payments criterion)
 
