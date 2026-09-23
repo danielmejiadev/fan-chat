@@ -47,7 +47,7 @@ one UI slice):
    real native process, so this test asserts the durability guarantee —
    a pending message is a row in SQLite the instant it's enqueued, not a
    JS variable — instead of literally simulating a force-quit), and
-   `purchaseService.test.ts` covers each purchase transition (success +
+   `subscriptionService.test.ts` covers each purchase transition (success +
    delayed confirmation, cancellation, failure, restore without
    duplicating, repeated taps, duplicate confirmation, cross-purchase
    isolation) as a separate case.
