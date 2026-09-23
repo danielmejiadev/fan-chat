@@ -89,9 +89,10 @@ business logic (idempotency, reconciliation order, retries).
   delayed confirmation of the sender's own submission, or an incoming
   message from the other participant. `mockChatConnection` reconciles
   (flush pending + pull the canonical thread) only when that event fires,
-  or on reconnect (`NetInfo`) / app-foreground (`AppState`) — never on a
-  timer. Reconciliation itself is serialized (a single in-flight run, at
-  most one queued rerun) so concurrent triggers can't resolve out of order.
+  or on reconnect (the debug-only forced-offline toggle) / app-foreground
+  (`AppState`) — never on a timer. Reconciliation itself is serialized (a
+  single in-flight run, at most one queued rerun) so concurrent triggers
+  can't resolve out of order.
 - [x] **UI wired end-to-end**: Expo Router navigation
   (`src/app/index.tsx` = list, `src/app/chat/[conversationId].tsx` =
   thread); each route resolves its own responsive layout via
