@@ -2,10 +2,11 @@ import { useState } from "react";
 
 import {
   confirmSubscription,
-  purchaseSubscription,
+  resolveSubscriptionPurchase,
   restoreSubscription,
+  startSubscriptionPurchase,
 } from "@/features/subscriptions/services/subscriptionService";
-import { StorePurchaseStatus } from "@/features/purchases/types";
+import { StorePurchaseStatus, type StorePurchase } from "@/features/purchases/types";
 import { useSubscriptionStore } from "@/store/subscriptionStore";
 import type { FanPurchaseOutcome } from "@/mockApi/subscriptions/mockFanPurchaseBackend";
 
@@ -24,15 +25,22 @@ export type SubscriptionPurchaseUiState =
  * hook's own local UI state (idle/purchasing/success/...), subscription
  * status is read straight from the persisted subscriptionStore — the two
  * are never merged into a single boolean.
+ *
+ * purchase() only starts the purchase and stays in "purchasing" — it
+ * doesn't resolve on its own, standing in for a payment sheet waiting on
+ * the user. resolveOutcome() is the separate call that settles it, mirroring
+ * the user tapping Confirm/Cancel on that sheet (or the store reporting a
+ * failure) after purchase() already opened it.
  */
 export function useSubscription(userId: string) {
   const status = useSubscriptionStore((state) => state.status);
   const [purchaseState, setPurchaseState] = useState<SubscriptionPurchaseUiState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingPurchase, setPendingPurchase] = useState<StorePurchase | null>(null);
 
   const isBusy = purchaseState === "purchasing" || purchaseState === "restoring";
 
-  const purchase = async (outcome: FanPurchaseOutcome = "succeed"): Promise<void> => {
+  const purchase = async (): Promise<void> => {
     if (isBusy) {
       return;
     }
@@ -40,7 +48,17 @@ export function useSubscription(userId: string) {
     setPurchaseState("purchasing");
     setErrorMessage(null);
 
-    const resolvedPurchase = await purchaseSubscription(userId, outcome);
+    const startedPurchase = await startSubscriptionPurchase();
+    setPendingPurchase(startedPurchase);
+  };
+
+  const resolveOutcome = async (outcome: FanPurchaseOutcome): Promise<void> => {
+    if (pendingPurchase === null) {
+      return;
+    }
+
+    const resolvedPurchase = await resolveSubscriptionPurchase(userId, pendingPurchase, outcome);
+    setPendingPurchase(null);
 
     if (resolvedPurchase.status === StorePurchaseStatus.Canceled) {
       setPurchaseState("cancelled");
@@ -79,7 +97,17 @@ export function useSubscription(userId: string) {
   const reset = (): void => {
     setPurchaseState("idle");
     setErrorMessage(null);
+    setPendingPurchase(null);
   };
 
-  return { purchaseState, status, errorMessage, purchase, restore, reset };
+  return {
+    purchaseState,
+    status,
+    errorMessage,
+    isAwaitingOutcome: pendingPurchase !== null,
+    purchase,
+    resolveOutcome,
+    restore,
+    reset,
+  };
 }

@@ -58,7 +58,7 @@ export function resetSubscriptionServiceStore(): void {
   defaultStore = null;
 }
 
-const inFlightPurchasesByProductId = new Map<string, Promise<StorePurchase>>();
+const inFlightStartsByProductId = new Map<string, Promise<StorePurchase>>();
 const inFlightRestoresByProductId = new Map<string, Promise<StorePurchase | null>>();
 const confirmedPurchaseIds = new Set<string>();
 
@@ -77,38 +77,43 @@ export async function hydrateSubscription(userId: string): Promise<void> {
 }
 
 /**
- * Starts (or joins) a fan membership purchase. Guarded against concurrent
- * duplicate initiations for the same product at the service level — a
- * second call while one is already running returns the same in-flight
- * promise instead of starting a new purchase flow.
+ * Starts (or joins) a fan membership purchase — creates the Pending store
+ * purchase and stops there, standing in for a real payment sheet that's now
+ * open and waiting on the user. Guarded against concurrent duplicate
+ * initiations for the same product at the service level — a second call
+ * while one is already pending returns the same in-flight promise instead
+ * of starting a new purchase flow.
  */
-export function purchaseSubscription(
-  userId: string,
-  outcome: FanPurchaseOutcome = "succeed",
-): Promise<StorePurchase> {
-  const existingPurchase = inFlightPurchasesByProductId.get(FAN_PRODUCT_ID);
-  if (existingPurchase !== undefined) {
-    return existingPurchase;
+export function startSubscriptionPurchase(): Promise<StorePurchase> {
+  const existingStart = inFlightStartsByProductId.get(FAN_PRODUCT_ID);
+  if (existingStart !== undefined) {
+    return existingStart;
   }
 
-  const purchasePromise = runSubscriptionPurchase(userId, outcome).finally(() => {
-    inFlightPurchasesByProductId.delete(FAN_PRODUCT_ID);
-  });
-
-  inFlightPurchasesByProductId.set(FAN_PRODUCT_ID, purchasePromise);
-  return purchasePromise;
-}
-
-async function runSubscriptionPurchase(
-  userId: string,
-  outcome: FanPurchaseOutcome,
-): Promise<StorePurchase> {
-  const pendingPurchase = await initiatePurchase(
+  const startPromise = initiatePurchase(
     FAN_PRODUCT_ID,
     FAN_PRODUCT_PRICE_CENTS,
     FAN_PRODUCT_CURRENCY,
-  );
-  const resolvedPurchase = getFanPurchaseBackend().purchase(pendingPurchase, userId, outcome);
+  ).finally(() => {
+    inFlightStartsByProductId.delete(FAN_PRODUCT_ID);
+  });
+
+  inFlightStartsByProductId.set(FAN_PRODUCT_ID, startPromise);
+  return startPromise;
+}
+
+/**
+ * Resolves a Pending purchase with a chosen outcome — standing in for the
+ * user tapping Confirm/Cancel on the store's payment sheet, or the store
+ * reporting a failure. Separate from startSubscriptionPurchase so the UI can
+ * hold a purchase open in "purchasing" until this is explicitly called.
+ */
+export async function resolveSubscriptionPurchase(
+  userId: string,
+  purchase: StorePurchase,
+  outcome: FanPurchaseOutcome,
+): Promise<StorePurchase> {
+  const resolvedPurchase = getFanPurchaseBackend().purchase(purchase, userId, outcome);
 
   await updatePurchaseStatus(resolvedPurchase.purchaseId, resolvedPurchase.status);
 
@@ -192,7 +197,28 @@ export async function confirmSubscription(userId: string, purchaseId: string, de
 
 /** Test-only: clears in-flight/idempotency tracking so each test starts fresh. */
 export function resetSubscriptionServiceState(): void {
-  inFlightPurchasesByProductId.clear();
+  inFlightStartsByProductId.clear();
   inFlightRestoresByProductId.clear();
   confirmedPurchaseIds.clear();
+}
+
+/**
+ * Dev-only: simulates losing local subscription state (e.g. a reinstall)
+ * while leaving the store_purchases ledger untouched — the same way a real
+ * reinstall would wipe the app's local data but leave Apple/Google's
+ * purchase record intact for a later "Restore purchase" to find. Useful for
+ * demoing/testing restore without wiping the purchase history it depends on
+ * (unlike the app's full "Reset demo data" action, which clears both).
+ */
+export async function clearSubscriptionAccess(userId: string): Promise<void> {
+  resetSubscriptionServiceState();
+
+  await resolveSubscriptionStore().setSubscription({
+    userId,
+    status: SubscriptionStatus.Inactive,
+    purchaseId: null,
+    updatedAt: Date.now(),
+  });
+
+  useSubscriptionStore.getState().setStatus(SubscriptionStatus.Inactive, null);
 }

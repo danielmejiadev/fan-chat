@@ -1,7 +1,8 @@
 import {
   confirmSubscription,
-  purchaseSubscription,
+  resolveSubscriptionPurchase,
   restoreSubscription,
+  startSubscriptionPurchase,
   resetSubscriptionServiceState,
   resetSubscriptionServiceStore,
   setSubscriptionServiceStoreForTests,
@@ -21,16 +22,23 @@ import {
   setSubscriptionBackendForTests,
 } from "@/mockApi/subscriptions/subscriptionBackendRegistry";
 import { createMockFanPurchaseBackend } from "@/mockApi/subscriptions/mockFanPurchaseBackend";
+import type { FanPurchaseOutcome } from "@/mockApi/subscriptions/mockFanPurchaseBackend";
 import {
   createMockSubscriptionBackend,
   DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS,
 } from "@/mockApi/subscriptions/mockSubscriptionBackend";
-import { StorePurchaseStatus } from "@/features/purchases/types";
+import { StorePurchaseStatus, type StorePurchase } from "@/features/purchases/types";
 import { SubscriptionStatus } from "@/features/subscriptions/types";
 import { resetSubscriptionStore, useSubscriptionStore } from "@/store/subscriptionStore";
 
 const userId = "fan-1";
 const confirmationDelayMs = 1000;
+
+/** Mirrors what the paywall does: start a purchase, then resolve it with a chosen outcome. */
+async function purchaseWithOutcome(outcome: FanPurchaseOutcome): Promise<StorePurchase> {
+  const startedPurchase = await startSubscriptionPurchase();
+  return resolveSubscriptionPurchase(userId, startedPurchase, outcome);
+}
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -52,7 +60,7 @@ afterEach(() => {
 
 describe("subscriptionService delayed backend confirmation", () => {
   it("keeps the subscription pending until confirmation resolves, then activates it", async () => {
-    const purchase = await purchaseSubscription(userId, "succeed");
+    const purchase = await purchaseWithOutcome("succeed");
     expect(purchase.status).toBe(StorePurchaseStatus.Succeeded);
 
     const confirmPromise = confirmSubscription(userId, purchase.purchaseId, confirmationDelayMs);
@@ -69,7 +77,7 @@ describe("subscriptionService delayed backend confirmation", () => {
 
 describe("subscriptionService cancellation", () => {
   it("activates no subscription when the purchase is cancelled", async () => {
-    const purchase = await purchaseSubscription(userId, "cancel");
+    const purchase = await purchaseWithOutcome("cancel");
 
     expect(purchase.status).toBe(StorePurchaseStatus.Canceled);
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Inactive);
@@ -78,7 +86,7 @@ describe("subscriptionService cancellation", () => {
 
 describe("subscriptionService failure", () => {
   it("activates no subscription when the purchase fails", async () => {
-    const purchase = await purchaseSubscription(userId, "fail");
+    const purchase = await purchaseWithOutcome("fail");
 
     expect(purchase.status).toBe(StorePurchaseStatus.Failed);
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Inactive);
@@ -87,13 +95,13 @@ describe("subscriptionService failure", () => {
 
 describe("subscriptionService: a failed purchase never clears an active subscription", () => {
   it("keeps the subscription active after an unrelated failed purchase attempt", async () => {
-    const successfulPurchase = await purchaseSubscription(userId, "succeed");
+    const successfulPurchase = await purchaseWithOutcome("succeed");
     await jest.advanceTimersByTimeAsync(DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS);
     await confirmSubscription(userId, successfulPurchase.purchaseId);
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Active);
 
     resetSubscriptionServiceState();
-    const failedPurchase = await purchaseSubscription(userId, "fail");
+    const failedPurchase = await purchaseWithOutcome("fail");
 
     expect(failedPurchase.status).toBe(StorePurchaseStatus.Failed);
     expect(useSubscriptionStore.getState().status).toBe(SubscriptionStatus.Active);
@@ -102,7 +110,7 @@ describe("subscriptionService: a failed purchase never clears an active subscrip
 
 describe("subscriptionService restore", () => {
   it("restores the subscription when a previous successful purchase exists", async () => {
-    const originalPurchase = await purchaseSubscription(userId, "succeed");
+    const originalPurchase = await purchaseWithOutcome("succeed");
     await jest.advanceTimersByTimeAsync(DEFAULT_SUBSCRIPTION_CONFIRMATION_DELAY_MS);
     await confirmSubscription(userId, originalPurchase.purchaseId);
     resetSubscriptionStore();
@@ -132,7 +140,7 @@ describe("subscriptionService idempotent confirmation", () => {
     const confirmSpy = jest.spyOn(backend, "confirmSubscription");
     setSubscriptionBackendForTests(backend);
 
-    const purchase = await purchaseSubscription(userId, "succeed");
+    const purchase = await purchaseWithOutcome("succeed");
 
     const firstConfirm = confirmSubscription(userId, purchase.purchaseId, confirmationDelayMs);
     const secondConfirm = confirmSubscription(userId, purchase.purchaseId, confirmationDelayMs);
@@ -148,17 +156,13 @@ describe("subscriptionService idempotent confirmation", () => {
 });
 
 describe("subscriptionService duplicate purchase flow prevention", () => {
-  it("does not start a second purchase while one is already in flight", async () => {
-    const backend = createMockFanPurchaseBackend();
-    const purchaseSpy = jest.spyOn(backend, "purchase");
-    setFanPurchaseBackendForTests(backend);
-
-    const [firstPurchase, secondPurchase] = await Promise.all([
-      purchaseSubscription(userId, "succeed"),
-      purchaseSubscription(userId, "succeed"),
+  it("does not start a second Pending purchase while one is already awaiting an outcome", async () => {
+    const [firstStart, secondStart] = await Promise.all([
+      startSubscriptionPurchase(),
+      startSubscriptionPurchase(),
     ]);
 
-    expect(firstPurchase.purchaseId).toBe(secondPurchase.purchaseId);
-    expect(purchaseSpy).toHaveBeenCalledTimes(1);
+    expect(firstStart.purchaseId).toBe(secondStart.purchaseId);
+    expect(firstStart.status).toBe(StorePurchaseStatus.Pending);
   });
 });

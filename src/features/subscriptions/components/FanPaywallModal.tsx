@@ -22,7 +22,7 @@ interface FanPaywallModalProps {
 }
 
 export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
-  const { purchaseState, status, errorMessage, purchase, restore } =
+  const { purchaseState, status, isAwaitingOutcome, purchase, resolveOutcome, restore } =
     useSubscription(CURRENT_FAN_ID);
 
   const isBusy = purchaseState === "purchasing" || purchaseState === "restoring";
@@ -59,13 +59,10 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
           {statusMessage !== null && (
             <Text className="mt-4 text-body text-foreground-primary">{statusMessage}</Text>
           )}
-          {errorMessage !== null && (
-            <Text className="mt-2 text-caption text-error">{errorMessage}</Text>
-          )}
 
-          {!isAlreadyActive && (
+          {!isAlreadyActive && !isAwaitingOutcome && (
             <Pressable
-              onPress={() => void purchase("succeed")}
+              onPress={() => void purchase()}
               accessibilityRole="button"
               disabled={isBusy}
               className={clsx("mt-5 h-11 items-center justify-center rounded-[10px] bg-primary", {
@@ -78,26 +75,38 @@ export function FanPaywallModal({ visible, onClose }: FanPaywallModalProps) {
             </Pressable>
           )}
 
-          {!isAlreadyActive && (
-            <View className="mt-4 flex-row justify-center gap-3">
-              <Pressable
-                onPress={() => void purchase("cancel")}
-                accessibilityRole="button"
-                disabled={isBusy}
-              >
-                <Text className="text-caption text-foreground-secondary">Simulate cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void purchase("fail")}
-                accessibilityRole="button"
-                disabled={isBusy}
-              >
-                <Text className="text-caption text-foreground-secondary">Simulate failure</Text>
-              </Pressable>
+          {isAwaitingOutcome && (
+            <View className="mt-5">
+              <Text className="text-center text-caption text-foreground-secondary">
+                Simulated payment sheet — choose how it resolves:
+              </Text>
+              <View className="mt-3 flex-row justify-center gap-3">
+                <Pressable
+                  onPress={() => void resolveOutcome("succeed")}
+                  accessibilityRole="button"
+                  className="rounded-[10px] bg-primary px-4 py-2"
+                >
+                  <Text className="text-body font-sans-medium text-white">Success</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void resolveOutcome("cancel")}
+                  accessibilityRole="button"
+                  className="rounded-[10px] border border-border-light px-4 py-2"
+                >
+                  <Text className="text-body font-sans-medium text-foreground-primary">Cancel</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void resolveOutcome("fail")}
+                  accessibilityRole="button"
+                  className="rounded-[10px] border border-border-light px-4 py-2"
+                >
+                  <Text className="text-body font-sans-medium text-foreground-primary">Fail</Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
-          {!isAlreadyActive && (
+          {!isAlreadyActive && !isAwaitingOutcome && (
             <Pressable
               onPress={() => void restore()}
               accessibilityRole="button"

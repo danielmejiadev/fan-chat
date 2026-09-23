@@ -9,6 +9,8 @@ import {
   rejectNextMessage,
   simulateIncomingMessages,
 } from "@/features/chat/services/chatService";
+import { CURRENT_FAN_ID } from "@/features/chat/constants/mockConversations";
+import { clearSubscriptionAccess } from "@/features/subscriptions/services/subscriptionService";
 import { useDebugNetworkStore } from "@/store/debugNetworkStore";
 
 const SIMULATED_INCOMING_TEXTS = [
@@ -45,6 +47,11 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
 
   const handleRejectNextMessage = () => {
     rejectNextMessage(conversationId);
+    setIsOpen(false);
+  };
+
+  const handleClearSubscriptionAccess = () => {
+    void clearSubscriptionAccess(CURRENT_FAN_ID);
     setIsOpen(false);
   };
 
@@ -149,6 +156,19 @@ export function ChatDebugMenu({ conversationId, participantId }: ChatDebugMenuPr
               <Text className="text-caption text-foreground-secondary">
                 Next send is refused outright by the backend — no retry offered, since resending the
                 same text would fail again.
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleClearSubscriptionAccess}
+              accessibilityRole="button"
+              className="rounded-lg border border-border-light px-4 py-3"
+            >
+              <Text className="text-body font-sans-medium text-foreground-primary">
+                Clear subscription access
+              </Text>
+              <Text className="text-caption text-foreground-secondary">
+                Simulates a reinstall: wipes local fan access but keeps the store purchase record,
+                so "Restore purchase" in the paywall has something to find.
               </Text>
             </Pressable>
           </Pressable>
