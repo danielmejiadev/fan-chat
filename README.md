@@ -365,7 +365,7 @@ comparable, before/after signal for this specific fix.
 
 ### Time spent
 
-**~15 hours**, across two days — spent across several phases of
+**~12 hours**, across two days — spent across several phases of
 implementation, verification, and testing, plus some functionality
 beyond what was explicitly required but that rounded out the app.
 
