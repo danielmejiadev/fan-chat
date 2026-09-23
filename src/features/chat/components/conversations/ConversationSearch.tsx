@@ -23,6 +23,7 @@ export function ConversationSearch({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
+          // RN's placeholderTextColor can't read a className; keep in sync with --color-foreground-muted in colors.css.
           placeholderTextColor="#737373"
           className="flex-1 text-body text-foreground-primary"
         />

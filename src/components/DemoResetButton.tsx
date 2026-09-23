@@ -1,6 +1,5 @@
 import { Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { clsx } from "clsx";
 
 import { Icon } from "@/components/ui/Icon";
 import { Text } from "@/components/ui/Text";
@@ -40,9 +39,7 @@ export function DemoResetButton({ variant }: DemoResetButtonProps) {
     <Pressable
       onPress={handleReset}
       accessibilityRole="button"
-      className={clsx(
-        "mt-2 flex-row items-center justify-center gap-2 rounded-[10px] border border-border-light px-4 py-2.5",
-      )}
+      className="mt-2 flex-row items-center justify-center gap-2 rounded-control border border-border-light px-4 py-2.5"
     >
       <Icon name="refresh-outline" size={16} className="text-foreground-secondary" />
       <Text className="text-h5 font-sans-medium text-foreground-secondary">Reset demo data</Text>

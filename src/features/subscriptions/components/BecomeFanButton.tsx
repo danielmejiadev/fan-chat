@@ -36,7 +36,7 @@ export function BecomeFanButton({ className }: BecomeFanButtonProps) {
         disabled={status !== SubscriptionStatus.Inactive}
         onPress={() => setIsPaywallOpen(true)}
         className={clsx(
-          "h-9 flex-row items-center gap-2 rounded-[10px] bg-highlight px-4 shadow-inset-xs",
+          "h-9 flex-row items-center gap-2 rounded-control bg-highlight px-4 shadow-inset-xs",
           className,
         )}
       >

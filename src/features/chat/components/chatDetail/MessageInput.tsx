@@ -53,6 +53,7 @@ export function MessageInput({ onSend, onOpenGift, onFocus }: MessageInputProps)
             value={draftText}
             onChangeText={setDraftText}
             placeholder="Type a message"
+            // RN's placeholderTextColor can't read a className; keep in sync with --color-foreground-muted in colors.css.
             placeholderTextColor="#737373"
             maxLength={MESSAGE_CHARACTER_LIMIT}
             className="flex-1 text-body text-foreground-primary"

@@ -20,7 +20,11 @@ export function SidebarItem({ icon, label, isActive, badgeCount }: SidebarItemPr
         "bg-highlight": isActive,
       })}
     >
-      <Icon name={icon} size={18} className={isActive ? "text-primary" : "text-foreground-zinc"} />
+      <Icon
+        name={icon}
+        size={18}
+        className={clsx({ "text-primary": isActive, "text-foreground-zinc": !isActive })}
+      />
       <Text
         className={clsx("flex-1 text-body", {
           "font-sans-medium text-primary": isActive,
@@ -31,7 +35,7 @@ export function SidebarItem({ icon, label, isActive, badgeCount }: SidebarItemPr
       </Text>
       {badgeCount !== undefined && badgeCount > 0 && (
         <View className="h-5 min-w-5 items-center justify-center rounded-full bg-error px-1">
-          <Text className="text-[10px] font-sans-medium text-white">{badgeCount}</Text>
+          <Text className="text-[10px] font-sans-medium text-error-foreground">{badgeCount}</Text>
         </View>
       )}
     </Pressable>
