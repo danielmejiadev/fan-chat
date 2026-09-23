@@ -73,7 +73,7 @@ pnpm test       # Jest
 
 ## Architecture
 
-Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
+For a more visual, easier-to-follow review, see the whole architecture here: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
 ### Features implemented
 
@@ -332,6 +332,102 @@ Connecting this to a real backend later means implementing the same
 `MockChatBackend` / `ChatConnection` / `MockPurchaseBackend` shapes against
 real endpoints — `chatService.ts`, `giftPurchaseService.ts` and
 `subscriptionService.ts` wouldn't need to change at all.
+
+### Design system — `src/design/colors.css`, `tailwind.config.js`
+
+A small global UI kit sitting underneath every screen: one file defines
+every color, type size, weight, radius and shadow the app uses, and every
+component consumes them by name through Tailwind/NativeWind classes
+(`bg-primary`, `text-h4`, `rounded-bubble`) instead of a hardcoded value.
+The goal is the same reason any real product has a design system: change
+the brand or add dark mode in one place, not by grepping every component
+for a color it happens to use.
+
+**Two tiers: raw primitives feed semantic tokens.** `src/design/colors.css`
+defines a `primary` 50–950 color scale (the raw brand palette) and then a
+separate set of *semantic* roles — `primary`, `surface`, `background`,
+`border`, `error`, `online`/`offline`/`away`, `highlight`, `bubble-received`
+— each backed by a CSS custom property. Components only ever reach for the
+semantic name (`bg-surface`, `text-error`), never the raw scale directly
+(no component says `bg-primary-500`) — that indirection is what lets the
+brand color change without touching a single component file. Every
+background token is paired with its own `-foreground` token right next to
+it (`primary` + `primary-foreground`, `error` + `error-foreground`, …) —
+shadcn/ui's convention — so a component never has to guess what text color
+reads correctly on top of a given background; it just pairs `bg-primary`
+with `text-primary-foreground`.
+
+**Why RGB triplets, not hex or `oklch()`/`hsl()`.** Every variable is
+stored as `"r g b"` (`--color-primary-500: 88 99 222;`), not a hex string
+or a color function — `tailwind.config.js` reads each one back with
+Tailwind's alpha-value format (`rgb(var(--color-primary-500) /
+<alpha-value>)`), which is what keeps opacity modifiers working
+(`bg-primary/10`) without needing a separate low-alpha token. This format
+isn't a style preference: on React Native, the style engine can't parse
+`oklch()`/`hsl()` at all — only hex/rgb — so Tailwind v4's newer
+OKLCH-based `@theme` approach doesn't work here, and this project
+deliberately stays on the v3-style CSS-variable config for that reason.
+
+**Typography as named roles, not raw pixel values.** `fontSize` in
+`tailwind.config.js` defines a type scale by role — `h1`…`h5`, `body`,
+`caption` — each pairing a size with its line-height, so a component
+writes `text-h4` instead of guessing a px value. Weight is a separate
+concern from size on purpose: React Native can't synthesize a bolder
+weight from one font file the way a browser can, so each Geist weight is
+its own loaded font file (`Geist_400Regular`, `Geist_500Medium`,
+`Geist_600SemiBold`, loaded via `useFonts()` in `src/app/_layout.tsx`) and
+exposed as its own `fontFamily` token (`font-sans`, `font-sans-medium`,
+`font-sans-semibold`). A component always pairs a size with a weight
+(`text-h4 font-sans-medium`) — the plain `font-medium`/`font-semibold`
+utilities only set a numeric `fontWeight` style, which doesn't select the
+right font file on native. `src/components/ui/Text.tsx` and
+`TextInput.tsx` bake `font-sans` in as the default so nothing needs to
+type it explicitly — callers only add a weight class when it actually
+deviates from regular.
+
+**Borders, radius and shadows are tokens too.** `borderRadius` names the
+handful of radii the app actually uses (`bubble`: message bubbles,
+`nav`: pill-shaped nav elements, `control`: buttons/inputs) instead of
+scattering arbitrary values like `rounded-[10px]` across components — once
+a value is used more than once, it gets a name here. `boxShadow` does the
+same for the few shadow treatments in use (`xs`, `inset-xs`,
+`inset-primary`). Border colors go through the same semantic-token
+pattern as everything else (`border-border`, `border-border-light`).
+
+**Icons read the same tokens as text**, even though `@expo/vector-icons`'
+`Ionicons` isn't NativeWind-aware out of the box — it takes color through
+its own `color` prop, not `className`. `src/components/ui/Icon.tsx` wraps
+it once with NativeWind's `cssInterop()` so `<Icon className="text-primary" />`
+resolves the same CSS variable every other component does, instead of a
+hardcoded hex passed to `color`. This is the one legitimate reason to wrap
+a third-party component for styling — done once, centrally, never per call
+site.
+
+**Dark mode is "free" once the tokens exist.** `darkMode: "media"` in
+`tailwind.config.js` means NativeWind follows the OS setting automatically
+— there's no manual toggle, no `useColorScheme` syncing, no `dark:`
+variant sprinkled through component code. The entire dark theme is one
+`@media (prefers-color-scheme: dark)` block in `colors.css` that
+redefines the exact same variable names with different values. Every
+component below keeps writing `bg-surface`/`text-foreground-primary`
+exactly as before, with zero awareness that the value now resolves
+differently — the indirection through a named token is what makes this
+possible. (This app's dark values are a reasonable inversion of the light
+ones, not sourced from a design file — noted as such in `colors.css` —
+but the mechanism for wiring in real dark-mode values later is already in
+place and requires no component changes.)
+
+**Rebranding is a one-file change.** Because every component reaches for
+a semantic name and never a raw hex, swapping the brand color means
+editing the `primary` scale (and the small handful of tints derived from
+it, like `--color-ring`/`--color-highlight`) in `colors.css` once — every
+button, link, badge and focus ring using `bg-primary`/`text-primary`
+updates automatically, with no component-by-component find-and-replace.
+Not implemented yet, but the same token indirection is what would support
+a future runtime/per-tenant accent color without a second theming system:
+a semantic variable could point at an override variable with a fallback
+(`--color-primary: var(--override-primary, 88 99 222);`), set once higher
+up the tree, with every component below still just writing `bg-primary`.
 
 ### Demo controls
 
