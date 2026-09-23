@@ -1,1 +1,0 @@
-DROP TABLE `purchase_confirmations`;

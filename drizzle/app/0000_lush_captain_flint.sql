@@ -12,12 +12,6 @@ CREATE TABLE `messages` (
 --> statement-breakpoint
 CREATE INDEX `idx_messages_conversation_created` ON `messages` (`conversationId`,`createdAt`);--> statement-breakpoint
 CREATE INDEX `idx_messages_conversation_status` ON `messages` (`conversationId`,`status`);--> statement-breakpoint
-CREATE TABLE `purchase_confirmations` (
-	`purchaseId` text PRIMARY KEY NOT NULL,
-	`entitlementStatus` text NOT NULL,
-	`confirmedAt` integer
-);
---> statement-breakpoint
 CREATE TABLE `store_purchases` (
 	`purchaseId` text PRIMARY KEY NOT NULL,
 	`productId` text NOT NULL,

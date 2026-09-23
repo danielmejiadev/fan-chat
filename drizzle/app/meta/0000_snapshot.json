@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "75928e8c-059e-4826-a70e-ce247ebf2c99",
+  "id": "7a4b71a3-c7d6-4178-a9e6-072f3dea4963",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "messages": {
@@ -89,37 +89,6 @@
           "isUnique": false
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "purchase_confirmations": {
-      "name": "purchase_confirmations",
-      "columns": {
-        "purchaseId": {
-          "name": "purchaseId",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entitlementStatus": {
-          "name": "entitlementStatus",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "confirmedAt": {
-          "name": "confirmedAt",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
