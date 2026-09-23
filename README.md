@@ -293,14 +293,74 @@ StoreKit/Play Billing integration, and "purchase succeeded" would need to
 be certified by Apple/Google's receipt/purchase-token systems and
 validated server-side, not just reported by the mock purchase service.
 
+### Performance: profiling the 50k-message conversation
+
+Profiled with **Xcode Instruments' Time Profiler**, against a **Release**
+build (`npx expo run:ios --configuration Release`) — the debug/Metro
+bridge adds overhead that doesn't exist in a real build, so a debug
+profile would have measured the wrong thing. Simulator: iPhone 18 Pro,
+iOS 27.0.
+
+**Sequence profiled** (identical for both runs, ~31 seconds each): open
+the 50k-message conversation → scroll fast to the bottom → scroll back to
+the top → type into the input → send the message.
+
+**Metric chosen and why**: total CPU time isn't a fair number here — it's
+mostly framework/thread-management overhead that a component-level fix
+can't touch. Instead, the metric is **time spent inside
+`HermesRuntimeImpl`** (Hermes, the JS engine, actually executing
+application code) as reported by Time Profiler's "Heaviest Stack Trace",
+following the real call path down from the JS thread's run loop
+(`RCTJSThreadManager` → `RuntimeScheduler_Modern::runEventLoopTick` →
+`Task::execute` → `HermesRuntimeImpl`). This isolates *the app's own
+render work* from OS/framework bookkeeping that happens either way,
+which is exactly what a React-level fix (memoizing a list row) can
+plausibly move.
+
+**Bottleneck identified**: `MessageBubble` wasn't memoized, so any state
+change anywhere in the 50k-message thread (a pending message's status
+tick, an incoming reconciliation) re-rendered every currently-visible row,
+not just the one that changed. Fixed by wrapping it in `React.memo`
+(`src/features/chat/components/chatDetail/MessageBubble.tsx`) with an
+explicit comparison on the fields that actually affect its output
+(`id`, `text`, `status`, `failureReason`) plus its stable callback/props.
+
+**Before/after** (same ~31s sequence, same simulator session, same 50k
+dataset):
+
+| | Before (no memo) | After (`React.memo`) |
+|---|---|---|
+| Recording length | 31.0s | 31.8s |
+| Total CPU weight | 8.61s | 8.52s |
+| `RuntimeScheduler_Modern::runEventLoopTick` | 5.20s | 4.47s |
+| `Task::execute` | 4.66s | 4.04s |
+| **`HermesRuntimeImpl` (JS execution)** | **3.80s** | **3.15s** |
+| As % of recording length | **12.3%** | **9.9%** |
+
+[![Time Profiler — before the fix](qa/performance/time-profiler-before-memo.png)](qa/performance/time-profiler-before-memo.png)
+[![Time Profiler — after the fix](qa/performance/time-profiler-after-memo.png)](qa/performance/time-profiler-after-memo.png)
+
+**Honest read of the result**: this is a real, measured ~17% reduction in
+JS execution time (3.80s → 3.15s), not a dramatic one. `RuntimeScheduler`/
+`Task::execute` overhead still dominates the total either way — that's
+React Native's own event-loop bookkeeping, which a component-level memo
+can't reduce. The two recordings were driven by hand (a manual scroll +
+type gesture, not a scripted one), so the gesture itself wasn't
+pixel-identical between runs; the ~31s duration was matched deliberately
+to keep the comparison fair, but a scripted, frame-accurate sequence
+(e.g. via Maestro or Detox) would be the more rigorous way to repeat this
+measurement if there were more time.
+
+**Known limitation, stated plainly**: this is a **Simulator** measurement
+on a Mac's CPU/GPU, not a physical device — it is not proof of
+performance on a real phone, and is reported here only as a repeatable,
+comparable, before/after signal for this specific fix.
+
 ### Known limitations / not yet done
 
 Tracked in detail in `PLAN.md`'s phase checklists — pulled out here so
 they're not missed:
 
-- Performance profiling on the 50k-message conversation (frame timing,
-  dropped frames, memory) has not been run yet — it needs a real
-  Simulator/device session.
 - The design kit (colors, typography, dark mode) has been verified via
   typecheck/lint/tests/`expo export`, but not visually reviewed on screen
   against the Figma source.
