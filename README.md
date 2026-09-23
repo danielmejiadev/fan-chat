@@ -52,83 +52,104 @@ pnpm test       # Jest
 
 Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
 
-The app is split into five layers, and every dependency between them points
-in one direction only (UI → Hooks → Services → Storage / mockApi). That's
-what makes the retry/idempotency logic testable in Jest without a real
-device or network: swap the bottom layer for an in-memory fake, keep
-everything above it unchanged.
+Three features — **chat**, **gifts** and **subscriptions** — each run the
+same five layers, and every dependency between them points in one direction
+only (UI → Hooks → Services → Storage / mockApi). That's what makes the
+retry/idempotency logic testable in Jest without a real device or network:
+swap the bottom layer for an in-memory fake, keep everything above it
+unchanged. Gifts and subscriptions also share one purchase ledger
+underneath them (`src/features/purchases/`), so a one-off tip and a
+recurring membership are recorded the same way and only diverge above it.
 
 ### UI — `src/app/`, `src/features/*/components/`, `src/components/`
 
 Pure render. A screen under `src/app/` only composes components and wires a
 single hook to them — no business logic, no direct calls into `storage/` or
-`mockApi/`. Components like `MessageBubble`, `GiftModal`, `ChatDebugMenu` and
-`DemoResetButton` read whatever a hook already computed and render it;
+`mockApi/`. `MessageBubble`, `GiftModal`, `FanPaywallModal`, `ChatDebugMenu`
+and `DemoResetButton` read whatever a hook already computed and render it;
 conditional styling (pending/failed/offline states) lives here as plain
 `clsx` classes, never as logic that decides *whether* something failed.
 
+There are three routes: `src/app/index.tsx` (chat list) and
+`src/app/chat/[conversationId].tsx` (thread). `GiftModal` and
+`FanPaywallModal` aren't routes — they're overlays mounted inside the
+thread screen, opened from the gift icon in `MessageInput` and from
+`BecomeFanButton` in the thread header.
+
 ### Hooks — `src/features/*/hooks/`, `src/hooks/`
 
-The client-side glue layer: local React state and optimistic updates.
-`useChatThread` composes two smaller hooks:
+The client-side glue layer: local React state and optimistic updates. No
+React Query anywhere — there's no remote fetch to cache, since the mock
+backend is synchronous local storage plus in-memory state.
 
-- `useMessages` — the single source of truth for a conversation's thread:
-  one subscription, one stale-read guard, one chronologically sorted
-  array. Confirmed messages paginate via a keyset window; every
-  Pending/Sent/Failed message is always included in full alongside
-  whatever confirmed page is loaded, since there are only ever a handful
-  of those at once.
-- `useChatConnection` — opens/closes the mock connection on
-  mount/unmount and re-renders whenever it reports something new. It has
-  nothing else to expose: the connection itself is fully event-driven and
-  owns its own `AppState`/`NetInfo` wiring (see `mockChatConnection.ts`
-  below) — there's no "sync now" function for a hook or component to call.
-
-Sending or retrying a message doesn't go through `useChatConnection` at
-all — `useChatThread` calls `chatService.submitPendingMessages()` directly,
-since that's a self-contained request/response round trip. Anything this
-device didn't initiate (an incoming message, the backend's own confirmation
-delay, the debug menu's simulated events) still reaches the UI through
-`useChatConnection`'s connection.
+- **`useChatThread`** composes `useMessages` (one subscription, one
+  stale-read guard, one chronologically sorted array — confirmed messages
+  paginate via a keyset window, every Pending/Sent/Failed message is
+  always included in full) and `useChatConnection` (opens/closes the mock
+  connection on mount/unmount; fully event-driven, no "sync now" function
+  to call). Sending or retrying doesn't go through `useChatConnection` at
+  all — `useChatThread` calls `chatService.submitPendingMessages()`
+  directly, since that's a self-contained request/response round trip.
+  Anything this device didn't initiate (an incoming message, the backend's
+  confirmation delay, the debug menu's simulated events) reaches the UI
+  through `useChatConnection` instead.
+- **`useGiftPurchase`** tracks the one-off tip lifecycle in local state:
+  `idle → pending → confirmed/failed/canceled`.
+- **`useSubscription`** tracks the membership purchase lifecycle
+  separately from the entitlement it eventually grants: `purchase()` stays
+  `purchasing` until `resolveOutcome()` answers it (modeling an open
+  payment sheet), then fires `confirmSubscription` in the background.
 
 ### Services — `src/features/*/services/`, `src/services/`
 
-`chatService.ts` and `purchaseService.ts` hold every rule that actually
-matters for the task: writing a message to the local outbox *before* any
-network attempt, deduping retries by `clientId`, keeping a purchase's store
-result separate from its backend entitlement confirmation, and deciding
-reconciliation order. `resetDemoData.ts` lives directly under
-`src/services/` instead of inside `chat/` or `purchases/`, because it spans
-both features.
+`chatService.ts`, `giftPurchaseService.ts` and `subscriptionService.ts`
+hold every rule that actually matters: writing a message to the local
+outbox *before* any network attempt, deduping retries by `clientId`, and
+keeping a subscription's purchase result separate from its backend
+entitlement confirmation. Both purchase services build on the shared
+`purchaseService.ts` (`src/features/purchases/services/`), which owns
+`initiatePurchase` (idempotent per product) and `updatePurchaseStatus`.
+`resetDemoData.ts` lives directly under `src/services/` instead of inside
+one feature, because it spans chat, gifts and subscriptions together.
 
 This is also the only layer with test-only escape hatches
-(`setChatServiceStoreForTests`, `setPurchaseServiceStoreForTests`) —
-production code always resolves the real SQLite-backed store; tests inject
-an in-memory one implementing the same contract.
+(`setChatServiceStoreForTests`, `setPurchaseServiceStoreForTests`,
+`setSubscriptionServiceStoreForTests`) — production code always resolves
+the real SQLite-backed store; tests inject an in-memory one implementing
+the same contract.
 
 ### Storage — `src/features/*/storage/`
 
-A typed CRUD contract (`ChatStore`, `PurchaseStore`) implemented twice:
-once against `expo-sqlite` for the real app (`chatDatabase.ts`,
-`purchasesDatabase.ts`), once fully in memory for Jest, which can't load a
-native SQLite binary (`createInMemoryChatStore.ts`). Services only ever
-depend on the contract, never on which implementation is behind it — that's
-what makes a pending message survive a force-quit: the moment
-`enqueueMessage` runs, it's a row in the single `messages` table, not a
-value sitting in a JS variable that dies with the process.
+A typed CRUD contract (`ChatStore`, `PurchaseStore`, `SubscriptionStore`)
+implemented twice per feature: once against `expo-sqlite` via Drizzle for
+the real app, once fully in memory for Jest, which can't load a native
+SQLite binary. Services only ever depend on the contract, never on which
+implementation is behind it — that's what makes a pending message survive
+a force-quit: the moment `enqueueMessage` runs, it's a row in the single
+`messages` table, not a value sitting in a JS variable that dies with the
+process.
 
-Chat storage is one table, `messages` — a message is written once
-(`INSERT`, `id` = its `clientId` if it originated on this device, else its
-`serverId`) and every later state change (Sent, Confirmed, Failed) is an
-`UPDATE` of that same row by `id`, never an insert into a different table
-followed by a delete. Earlier this was two tables (`pending_messages` for
-the local outbox, `messages` for the server-confirmed thread, plus an
-`accepted_client_ids` idempotency table), which meant every read had to
-reconcile two arrays and there was a real window where a just-confirmed
-message existed in neither — see `PLAN.md` for the full writeup of why
-that was collapsed.
+Three tables, one shared handle (`src/lib/database.ts`):
 
-### mockApi — `src/mockApi/chat/`, `src/mockApi/purchases/`
+- **`messages`** (chat) — a message is written once (`INSERT`, `id` = its
+  `clientId` if it originated on this device, else its `serverId`) and
+  every later state change (Sent, Confirmed, Failed) is an `UPDATE` of
+  that same row by `id`, never an insert into a different table followed
+  by a delete. Earlier this was two tables (`pending_messages` for the
+  local outbox, `messages` for the server-confirmed thread, plus an
+  `accepted_client_ids` idempotency table), which meant every read had to
+  reconcile two arrays and there was a real window where a just-confirmed
+  message existed in neither — see `PLAN.md` for the full writeup of why
+  that was collapsed.
+- **`store_purchases`** (shared ledger) — one row per purchase attempt
+  across gifts *and* subscriptions, `purchaseId` keyed, insert-only.
+  Gifts stops here; a `Succeeded` row is the whole story.
+- **`subscriptions`** — one row per user (`userId` PK, `status`,
+  `purchaseId`), upserted. Exists because a membership needs an ongoing
+  entitlement a one-off gift never does; mirrored into a Zustand store
+  (`useSubscriptionStore`) so the UI reads it without a service round trip.
+
+### mockApi — `src/mockApi/chat/`, `src/mockApi/gifts/`, `src/mockApi/subscriptions/`
 
 Everything that stands in for a real backend, kept in its own top-level
 folder instead of inside `services/` — this is the one layer a real API
@@ -136,8 +157,8 @@ integration would replace outright, without touching anything above it:
 
 - `mockChatBackend.ts` — accepts sends, remembers confirmed messages by
   `clientId` in memory for idempotency, and can be told to drop a response
-  or reject a message's content outright (used by the demo controls to
-  reproduce the required failure scenarios on demand).
+  or reject a message's content outright (used by the debug menu to
+  reproduce the two chat failure modes on demand).
 - `mockChatConnection.ts` — event-driven, like a real socket/channel
   subscription: `mockChatBackend.subscribe()` notifies it the moment a
   message actually joins the canonical thread, instead of polling on a
@@ -146,27 +167,28 @@ integration would replace outright, without touching anything above it:
   and app-foreground (`AppState`) — so nothing outside this file ever needs
   to ask it to sync; it reconciles (flush + full resync) on all of them to
   catch up on anything missed while offline.
-- `mockPurchaseBackend.ts` — the store's purchase result and the backend's
-  entitlement confirmation as two separate, independently-timed calls.
+- `mockPurchaseBackend.ts` — the gift backend; resolves `Succeeded`
+  immediately, no delay, no simulated failure.
+- `mockFanPurchaseBackend.ts` / `mockSubscriptionBackend.ts` — the
+  subscription backends; the store's purchase result (via the paywall's
+  simulated payment sheet) and the backend's entitlement confirmation
+  (~1.5s delay, idempotent) as two separate, independently-timed calls.
 
 Connecting this to a real backend later means implementing the same
 `MockChatBackend` / `ChatConnection` / `MockPurchaseBackend` shapes against
-real endpoints — `chatService.ts` and `purchaseService.ts` wouldn't need to
-change at all.
+real endpoints — `chatService.ts`, `giftPurchaseService.ts` and
+`subscriptionService.ts` wouldn't need to change at all.
 
 ### Demo controls
-
-Two dev-only affordances make every required scenario reachable by tapping
-the screen instead of only from a test:
 
 - **`ChatDebugMenu`** (floating bug icon in a chat thread, `__DEV__` only) —
   "Drop next response" and "Reject next message" force the two chat failure
   modes on demand; "Simulate 4 incoming messages" adds messages from the
   other participant, useful combined with going offline first.
 - **`DemoResetButton`** (sidebar on desktop, floating button on the
-  conversation list on mobile — always visible, not `__DEV__`-gated, since
-  the task asks for a reset action) — wipes every chat/purchase table and
-  drops the in-memory mock backends, so each recording starts clean.
+  conversation list on mobile — always visible) — wipes every
+  chat/purchase/subscription table and drops the in-memory mock backends,
+  so each recording starts clean.
 
 ### Technical implementation notes
 
@@ -181,10 +203,10 @@ the screen instead of only from a test:
 - **SQLite-backed message persistence.** A message becomes a row in the
   single SQLite `messages` table the instant `enqueueMessage` runs — never
   just a value sitting in a JS variable — so it survives a force-quit.
-  `ChatStore`/`PurchaseStore` (`src/features/*/storage/`) are typed
-  contracts implemented once against SQLite (via Drizzle ORM) for the real
-  app and once fully in memory for Jest, which can't load a native SQLite
-  binary.
+  `ChatStore`/`PurchaseStore`/`SubscriptionStore` (`src/features/*/storage/`)
+  are typed contracts implemented once against SQLite (via Drizzle ORM) for
+  the real app and once fully in memory for Jest, which can't load a native
+  SQLite binary.
 - **Keyset pagination for the 50k-message dataset.**
   `getConfirmedMessagesPage` paginates Confirmed messages by
   `(createdAt, serverId)` instead of offset, verified against the full
@@ -192,14 +214,16 @@ the screen instead of only from a test:
   (`chatStorePagination.test.ts`). `MessagesList` renders it with
   `@shopify/flash-list` and loads older pages via
   `onStartReached`/`useChatThread.loadOlderMessages` in a growing window.
-- **Two-phase purchase state.** `purchaseService.ts` keeps a purchase's
-  store result (`processPurchase` — succeeded/failed/canceled) and its
-  backend entitlement confirmation (`confirmPurchase`) as two separate,
+- **Two-phase state for subscriptions, not for gifts.** A gift is a single
+  transaction against the shared `store_purchases` ledger — `Succeeded` is
+  the whole story, so `useGiftPurchase` only needs
+  `idle → pending → confirmed/failed/canceled`. A subscription instead
+  keeps its store purchase result and its backend entitlement confirmation
+  (`subscriptionService.confirmSubscription`) as two separate,
   independently-timed steps — a succeeded purchase with no confirmation yet
-  reads as `Pending`, never `Active`. `useGiftPurchase` exposes this as an
-  explicit `idle → pending → pending-confirmation → confirmed/failed/canceled`
-  state machine so the UI can show the real in-between state instead of
-  optimistically granting access on payment alone.
+  reads as `PendingConfirmation`, never `Active`, so the UI shows that real
+  in-between state instead of optimistically granting access on payment
+  alone.
 - **SQLite on web (`SharedArrayBuffer`/`Sync operation timeout`).** Opening
   `expo-sqlite` in a browser initially failed with a missing
   `SharedArrayBuffer`, then with a `Sync operation timeout` even after
@@ -211,6 +235,64 @@ the screen instead of only from a test:
   awaits before rendering. Full root-cause writeup in `PLAN.md`, under
   "Resuelto: `expo-sqlite` en web".
 
+### Resuming a large media upload
+
+Not built for this exercise, but the same pattern already used for chat
+messages applies directly: persist the pending unit of work to SQLite
+*before* attempting the network call, key it by a stable id that survives
+a restart, and reconcile against the backend rather than trusting the
+local record blindly.
+
+For a large upload (e.g. a video attachment), that means:
+
+1. Split the file into fixed-size chunks up front, each with a stable
+   `uploadId` + sequence number + checksum.
+2. Persist upload progress in SQLite the moment the upload starts —
+   which chunks of which `uploadId` have been acknowledged by the server —
+   the same role `messages` plays for pending sends.
+3. **Backgrounding** and **force-quit/force-stop** need different
+   handling:
+   - Backgrounding: the process is still alive (or the OS gives a
+     background-task window), so the upload can simply pause and resume
+     from in-memory state once the app returns to the foreground —
+     nothing was lost because nothing left memory.
+   - Force-quit/force-stop: the process is gone entirely. The only thing
+     that survives is whatever was already written to SQLite. On reopen,
+     the app must not assume its local record is accurate — it should ask
+     the backend which chunks of that `uploadId` it actually has (an ack
+     for the last chunk sent could have been lost, exactly like a chat
+     message's confirmation) and resume from there, not from wherever the
+     local table says it stopped.
+
+### App Store / Google Play rules relevant to creator content and payments
+
+This app's paywall is simulated, but a real version selling access to a
+creator's content from inside the app would be squarely covered by both
+platforms' in-app purchase requirements, not a self-hosted payment
+provider:
+
+- **Apple, App Store Review Guideline 3.1.1 (In-App Purchase)** —
+  digital content or services consumed inside the app must be sold
+  through StoreKit/Apple In-App Purchase, not an external processor like
+  Stripe. https://developer.apple.com/app-store/review/guidelines/#in-app-purchase
+- **Apple, App Store Review Guideline 3.1.3(b) ("Reader" apps)** —
+  narrow carve-outs exist for content consumed outside the app, but a
+  fan-chat paywall unlocking content inside the app doesn't qualify for
+  them and falls under 3.1.1. https://developer.apple.com/app-store/review/guidelines/#business
+- **Google, Play Billing Policy** — the same requirement on Android:
+  digital content unlocked inside the app must go through Google Play's
+  billing system. https://support.google.com/googleplay/android-developer/answer/9858738
+- **Google, Play Content Policy on user-generated content** — relevant
+  once creators' content itself is what other users pay to see, since
+  UGC moderation rules would apply on top of the billing rules.
+  https://support.google.com/googleplay/android-developer/answer/9888379
+
+Impact on scope: a real version of this app could not process payments
+with its own backend the way the mock does here — it would need
+StoreKit/Play Billing integration, and "purchase succeeded" would need to
+be certified by Apple/Google's receipt/purchase-token systems and
+validated server-side, not just reported by the mock purchase service.
+
 ### Known limitations / not yet done
 
 Tracked in detail in `PLAN.md`'s phase checklists — pulled out here so
@@ -219,8 +301,6 @@ they're not missed:
 - Performance profiling on the 50k-message conversation (frame timing,
   dropped frames, memory) has not been run yet — it needs a real
   Simulator/device session.
-- No screen recordings of the required messaging/purchase scenarios exist
-  yet.
 - The design kit (colors, typography, dark mode) has been verified via
   typecheck/lint/tests/`expo export`, but not visually reviewed on screen
   against the Figma source.

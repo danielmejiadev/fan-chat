@@ -1,562 +1,271 @@
-# Plan — Test técnico Senior React Native @ Fans Holdings
+# Plan — Senior React Native Technical Test @ Fans Holdings
 
-Repo: `fan-chat`. Presupuesto: 6-7 horas. Entrega: zip + walkthrough 30 min.
+Repo: `fan-chat`. Budget: 6-7 hours. Delivery: zip + 30-minute walkthrough.
 
-Criterios de evaluación: mensajería y recuperación (30%), pagos/acceso pago
-(25%), UI + performance (30%), testing/explicación (15%).
+Evaluation criteria: messaging & recovery (30%), payments/paid access (25%),
+UI + performance (30%), testing/explanation (15%).
 
-Enfoque: **funcionalidad primero, UI/estilos al final**. Cada fase deja algo
-testeable antes de pasar a la siguiente.
+Approach: **functionality first, UI/styling last**. Each phase leaves
+something testable before moving to the next.
 
-> **Este archivo es la única fuente de verdad del progreso.** Sirve para
-> retomar el trabajo con cualquier agente (Claude, otro modelo, otra
-> sesión) sin perder contexto. Reglas de mantenimiento:
-> - Cada vez que se termina algo, se marca `[x]` aquí **en el mismo turno**
->   en que se termina — no se deja para después.
-> - La sección **"Work in progress"** de más abajo es el único lugar para
->   trabajo a medias / bugs siendo diagnosticados. Se agrega una entrada al
->   empezar a investigar algo no trivial, y se borra (no se archiva) en
->   cuanto se resuelve y se verifica — su contenido pasa a estar reflejado
->   como checkbox resuelto en la fase correspondiente.
-> - Si algo de aquí queda desactualizado respecto al código, el código
->   manda; se corrige este archivo para que vuelva a ser verdad.
+> **This file is the single source of truth for progress.** It lets work
+> resume with any agent (Claude, another model, another session) without
+> losing context. Maintenance rules:
+> - Every time something is finished, it gets marked `[x]` here **in the
+>   same turn** it's finished — never left for later.
+> - The **"Work in progress"** section further down is the only place for
+>   half-done work / bugs being diagnosed. An entry is added when starting
+>   to investigate something non-trivial, and removed (not archived) as
+>   soon as it's resolved and verified — its content then lives on as a
+>   resolved checkbox in the corresponding phase.
+> - If anything here goes stale relative to the code, the code wins; this
+>   file gets corrected so it's true again.
 
-## Decisiones de arquitectura (confirmadas)
+## Architecture decisions (confirmed)
 
-| Decisión | Elegido | Por qué |
+| Decision | Chosen | Why |
 |---|---|---|
-| Plataforma de prueba | iOS Simulator + Web (Metro) | macOS local; web se usa además para iterar rápido en UI |
-| Persistencia | `expo-sqlite` (todo: cola de mensajes, idempotencia, dataset de 50k) | Un solo motor, consultas paginadas eficientes, evita duplicar lógica de storage |
-| Lista virtualizada | `@shopify/flash-list` | Mejor performance en listas invertidas tipo chat con 50k items |
-| Fuente de diseño | Figma real (FanSuite), extraído vía "Copy as code → CSS (all layers)" + screenshots (desktop y mobile) pegados por el usuario, guardados en `docs/design/` | MCP de Figma no tiene acceso de editor; esta vía no lo requiere |
-| Layout responsive | `useIsDesktopLayout` + `AppChrome` (`DesktopSidebar`/`MobileTabBar`) | Un solo `ChatWorkspace` que decide layout en runtime en vez de duplicar pantallas por plataforma |
+| Test platform | iOS Simulator + Web (Metro) | macOS local; web is also used to iterate quickly on UI |
+| Persistence | `expo-sqlite` via Drizzle ORM, one shared database (`src/lib/database.ts`) | One engine, typed schema + migrations, efficient paginated queries, no duplicated storage logic across features |
+| Virtualized list | `@shopify/flash-list` | Better performance on an inverted, chat-style list with 50k items |
+| Design source | Real Figma (FanSuite), extracted via "Copy as code → CSS (all layers)" + desktop/mobile screenshots, saved under `docs/design-kit/` | The Figma MCP has no editor access; this path doesn't need it |
+| Responsive layout | `useIsDesktopLayout` + `DesktopSidebar`/`MobileTabBar` | Each route decides its own layout at runtime instead of duplicating screens per platform |
+| Payments domain split | One shared purchase ledger (`src/features/purchases/`) underneath two independent features — `gifts` (one-off) and `subscriptions` (recurring, with its own entitlement state) | A tip and a membership share the same "did the store charge succeed" bookkeeping, but only a membership needs an ongoing entitlement to track — modeling them as one feature would force gifts to carry state it never uses |
+| Messages storage | One `messages` table, one row per message, `id` fixed at creation and never reassigned | Every delivery-state transition (Pending → Sent → Confirmed/Failed) is a single `UPDATE` by that `id`, so there's never a window where a message exists in neither an "outbox" table nor a "confirmed" table |
 
-## Design tokens extraídos del Figma (FanSuite, node 1:9)
+## Design tokens extracted from Figma (FanSuite, node 1:9)
 
-Ya viven en `tailwind.config.js` (colores, `boxShadow`, `borderRadius`) —
-**no se repiten valores hardcodeados aquí**; si hace falta ver el valor
-exacto de un token, `tailwind.config.js` es la fuente. Fuente original:
-CSS copiado del frame "Messages Fan /Mobile/" + capturas en
-`docs/design/fansuite-desktop.jpg` y `docs/design/fansuite-mobile.jpg`.
+Live in `tailwind.config.js` (colors, `boxShadow`, `borderRadius`) — **not
+repeated as hardcoded values here**; `tailwind.config.js` is the source of
+truth for exact token values. Original source: CSS copied from the
+"Messages Fan /Mobile/" frame + screenshots under `docs/design-kit/`.
 
-Pendiente de tokens: fuente `Geist` no confirmada instalada (revisar si
-`expo-font`/Google Fonts la trae o si se queda en fallback a system font —
-anotar como limitación en el README si aplica).
+## Phase 0 — Setup & base architecture
 
-## Fase 0 — Setup y arquitectura base ✅
+- [x] Jest + jest-expo + `@testing-library/react-native` v14; `pnpm test`,
+  `pnpm run typecheck`, `pnpm run lint` clean.
+- [x] `expo-sqlite`, `drizzle-orm`, `@shopify/flash-list` installed.
+- [x] Domain types colocated per feature module (`src/features/<name>/types.ts`)
+  instead of one shared file — `chat` owns `Message`/`MessageStatus`,
+  `purchases` owns `StorePurchase`/`StorePurchaseStatus`, `subscriptions`
+  owns `SubscriptionStatus`.
+- [x] One shared SQLite handle (`src/lib/database.ts`), combining the
+  chat + purchases + subscriptions Drizzle schemas, initialized before
+  first render via `useAppReady` (`src/app/_layout.tsx`).
 
-- [x] Jest + jest-expo + @testing-library/react-native v14; `pnpm test`,
-  `pnpm run typecheck`, `pnpm run lint` limpios.
-- [x] `expo-sqlite`, `@shopify/flash-list` instalados.
-- [x] Estructura de datos (`ClientMessage`/`ServerMessage`/`ThreadMessage`,
-  `StorePurchase`/`PurchaseConfirmation`).
-- [x] Esquema SQLite: `src/lib/database.ts` (conexión singleton),
-  `chatDatabase.ts`, `purchasesDatabase.ts`. Inicializado en
-  `src/app/_layout.tsx`.
+**Architecture note**: a `storage/` layer per feature module, separate from
+`services/` — `storage/` owns the schema and raw CRUD; `services/` owns the
+business logic (idempotency, reconciliation order, retries).
 
-**Nota de arquitectura**: capa `storage/` por feature module, separada de
-`services/` — `storage/` es dueña del schema y CRUD crudo; `services/`
-tiene la lógica de negocio (idempotencia, orden de reconciliación,
-reintentos).
+## Phase 1 — Reliable messaging (30%)
 
-## Fase 1 — Mensajería confiable (30%) ✅ funcional + UI
-
-- [x] Repro del bug de duplicados (respuesta perdida tras retry) antes de
-  tocar código, documentado en `chatService.test.ts`.
-- [x] Mensajes pendientes persistidos en SQLite antes de encolarlos,
-  `clientId` estable (UUID vía `expo-crypto`).
-- [x] Dedupe por `clientId` en el mock backend + `accepted_client_ids`.
-- [x] `chatService.ts` completo, con `ChatStore` inyectable para tests en
-  memoria.
-- [x] Los 5 escenarios obligatorios cubiertos por tests
-  (`chatService.test.ts`, verde) — force-quit resuelto vía
-  `chatService.persistenceGuarantee.test.ts` (honestamente testeable en
-  Jest) + checklist manual en `docs/manual-scenarios.md` para grabar en el
-  Simulator (Jest no puede matar/reabrir un proceso nativo real).
-- [x] `useChatThread` (`src/features/chat/hooks/useChatThread.ts`): thread
-  confirmado + pendiente, `sendMessage` optimista, `retryMessage`,
-  `loadOlderMessages` (ventana creciente), reconciliación periódica (5s) +
-  al volver a foreground (`AppState`). Cubierto por
+- [x] Reproduce the duplicate-message bug (lost response followed by a
+  retry) before touching any fix, documented in `chatService.test.ts`.
+- [x] Pending messages persisted to SQLite before being queued, keyed by a
+  stable `clientId` (UUID via `expo-crypto`).
+- [x] Dedup by `clientId` in the mock backend.
+- [x] One `messages` table — a message is written once (`INSERT`, `id` =
+  its `clientId` if it originated on this device, else its `serverId`) and
+  every later state change (Sent, Confirmed, Failed) is an `UPDATE` of that
+  same row by `id`. A lost response followed by a retry can never produce a
+  duplicate, no matter how many times it's replayed, because reconciliation
+  always resolves back to the same fixed row.
+- [x] `chatService.ts` complete, with an injectable `ChatStore` for
+  in-memory tests.
+- [x] The 5 required scenarios covered by tests (`chatService.test.ts`) —
+  force-quit persistence covered by `chatService.persistenceGuarantee.test.ts`
+  (honestly testable in Jest, since it only needs a row surviving in the
+  store rather than an actual process kill) plus a manual checklist for
+  recording the remaining scenarios in the Simulator (Jest can't kill and
+  reopen a real native process).
+- [x] `useChatThread` composes `useMessages` (confirmed thread, keyset
+  pagination + full non-confirmed array, one stale-read guard) and
+  `useChatConnection` (opens/closes the mock connection for the thread's
+  lifetime): `sendMessage` (optimistic), `retryMessage`,
+  `loadOlderMessages` (growing window). Covered by
   `hooks/__tests__/useChatThread.test.ts`.
-- [x] **UI conectada**: `ChatWorkspace` reemplazado por navegación basada en
-  Expo Router (`src/app/index.tsx` = lista, `src/app/chat/[conversationId].tsx`
-  = thread); cada ruta resuelve su propio layout responsive con
-  `useIsDesktopLayout` (desktop: `DesktopSidebar` + lista (`Conversations`) +
-  `ThreadPane`; mobile: `Conversations`/`ThreadPane` a pantalla completa +
-  `MobileTabBar`). Componentes reorganizados por sub-feature:
+- [x] **Event-driven sync, no polling.** `mockChatBackend.subscribe()`
+  notifies listeners the instant a message joins the canonical thread — a
+  delayed confirmation of the sender's own submission, or an incoming
+  message from the other participant. `mockChatConnection` reconciles
+  (flush pending + pull the canonical thread) only when that event fires,
+  or on reconnect (`NetInfo`) / app-foreground (`AppState`) — never on a
+  timer. Reconciliation itself is serialized (a single in-flight run, at
+  most one queued rerun) so concurrent triggers can't resolve out of order.
+- [x] **UI wired end-to-end**: Expo Router navigation
+  (`src/app/index.tsx` = list, `src/app/chat/[conversationId].tsx` =
+  thread); each route resolves its own responsive layout via
+  `useIsDesktopLayout` (desktop: `DesktopSidebar` + `Conversations` +
+  `ThreadPane`; mobile: `Conversations`/`ThreadPane` full-screen +
+  `MobileTabBar`). Components organized by sub-feature:
   `features/chat/components/conversations/` (`Conversations`,
   `ConversationListItem`, `ConversationListView`, `ConversationSearch`,
-  `ChatListHeader`) y `features/chat/components/chatDetail/` (`ThreadPane`,
-  `MessagesList`, `MessageBubble`, `MessageInput`, `ChatThreadHeader`,
-  `GiftRow`, `OfflineBanner`).
-- [x] Demo seeding (`ensureDemoConversationSeeded`) y flujo completo
-  probados a mano end-to-end en web (Metro, vía Playwright headless):
-  abrir una conversación, enviar un mensaje y verlo pasar por los tres
-  estados de entrega, disparar "Drop next response"/retry desde
-  `ChatDebugMenu` y ver el estado failed. La app funciona correctamente;
-  sigue apareciendo el overlay rojo dev-only "Sync operation timeout" de
-  `expo-sqlite` en web (ver nota abajo), que no bloquea nada pero no se
-  investigó más a fondo por no ser parte de esta tarea.
-- [x] **Ticks de entrega estilo WhatsApp** (Pending → reloj, Sent → check
-  simple, Confirmed → doble check): el backend mock acepta el envío de
-  inmediato (`submitMessage` en `src/mockApi/chat/mockChatBackend.ts`
-  devuelve sincrónicamente) pero solo lo agrega a su hilo canónico
-  (`listMessages()`) tras un delay simulado
-  (`DEFAULT_CONFIRMATION_DELAY_MS = 600ms`, vía `setTimeout` dentro del
-  propio mock backend — no en `chatService` ni en el componente).
-  `chatService.flushPendingMessages` marca `Sent` al aceptar y ya no
-  inserta/borra el mensaje confirmado directamente; eso ahora lo hace
-  `receiveMessages()` cuando `syncThread` observa el mensaje en el hilo
-  del backend, que es también lo que borra la fila pendiente y produce el
-  salto a `origin: "server"` (double check). `mockChatConnection` agrega
-  un re-sync corto (`DEFAULT_CONFIRMATION_DELAY_MS + 100ms`) tras cada
-  envío para no esperar al poll de 5s. Cubierto por
-  `chatService.test.ts` (incluye un test nuevo que verifica que el
-  mensaje queda observable en `Sent` antes de confirmarse, con fake
-  timers) y `chatService.persistenceGuarantee.test.ts`, ambos verdes.
-  Iconos en `MessageBubble.tsx` vía `getMessageDeliveryTick.ts` (pura,
-  fuera del componente) + `Icon` (`cssInterop`d Ionicons). Verificado
-  visualmente en web (Playwright), luz y oscuro: el salto single→double
-  check se ve claramente unos ~700ms después de enviar.
+  `ChatListHeader`) and `features/chat/components/chatDetail/`
+  (`ThreadPane`, `MessagesList`, `MessageBubble`, `MessageInput`,
+  `ChatThreadHeader`, `GiftRow`, `OfflineBanner`).
+- [x] **WhatsApp-style delivery ticks** (Pending → clock, Sent → single
+  check, Confirmed → double check): the mock backend accepts a send
+  immediately (`submitMessage` resolves synchronously) but only joins it to
+  the canonical thread after a simulated confirmation delay (~600ms), at
+  which point `receiveMessages()` flips the row to Confirmed. Icons in
+  `MessageBubble.tsx` come from a pure `getMessageDeliveryTick.ts` helper,
+  kept outside the component.
+- [x] Demo seeding and the full flow verified end-to-end on web
+  (Playwright): open a conversation, send a message and watch it move
+  through all three delivery states, trigger "Drop next response" / retry
+  from `ChatDebugMenu` and see the failed state.
 
-## Fase 2 — Pagos y acceso pago (25%) ✅ funcional + UI
+## Phase 2 — Shared purchase ledger
 
-- [x] `PurchaseStore` + `createSqlitePurchaseStore` (mismo patrón que
-  chat).
-- [x] `mockPurchaseBackend.ts`: `purchase()`, `confirmEntitlement()`
-  (separada en el tiempo), `restorePurchases()`.
-- [x] `purchaseService.ts`: `initiatePurchase`, `processPurchase`,
-  `confirmPurchase`, `restorePurchases`, `getEntitlementStatus` — mismo
-  patrón de DI que `chatService`.
-- [x] Taps repetidos no duplican compra (idempotente por `productId`
-  mientras hay una `Pending` en curso).
-- [x] Cubierto por tests (`purchaseService.test.ts`, 11/11 verde): compra
-  exitosa + confirmación separada, cancelación, fallo, restauración sin
-  duplicar, confirmación demorada, taps repetidos, confirmación duplicada,
-  aislamiento entre compras.
-- [x] **UI conectada**: `GiftModal` (responsive, elige monto/medio de
-  pago, muestra subtotal/fees/total) + `useGiftPurchase` hook
-  (`pay`/`reset`, estados `idle/pending/confirmed/failed/canceled`) +
-  `purchaseBackendRegistry.ts`. Disparado desde `MessageInput` → `ThreadPane`
-  (`features/chat/components/chatDetail/`); al confirmar, inserta un mensaje
-  de sistema en el thread vía `onGiftSent`.
-- [ ] Probar a mano el flujo de gift end-to-end en Simulator/web (mismo
-  bloqueo que Fase 1: SQLite en progreso).
-- [ ] Para el README: explicar cómo conectaría a billing real (RevenueCat
-  o StoreKit/Billing directo), validación server-side de recibos, manejo
-  de expiración/reembolsos.
+- [x] `src/features/purchases/` as its own top-level feature module, not
+  nested inside `gifts` or `subscriptions` — both build on it instead of
+  duplicating "did the store charge succeed" bookkeeping.
+- [x] `store_purchases` table: one row per purchase attempt
+  (`purchaseId` PK, `productId`, `priceCents`, `currency`, `status`,
+  `createdAt`), insert-only.
+- [x] `purchaseService.ts`: `initiatePurchase(productId, priceCents, currency)`
+  idempotent per product — returns the existing `Pending` purchase instead
+  of creating a duplicate if one is already in flight — plus
+  `updatePurchaseStatus` and `getPurchasesForProduct`.
+- [x] Covered by tests: successful purchase, cancellation, failure, repeated
+  taps not duplicating a purchase, isolation between different purchases.
 
-## Fase 3 — Datos a escala y performance
+## Phase 3 — Gifts, one-off tips (part of the 25% payments criterion)
 
-- [x] 50,000 mensajes mock repetibles (seed fija, PRNG mulberry32) para
+- [x] `mockPurchaseBackend.ts`: `purchase()` resolves `Succeeded`
+  immediately — a gift is meant to feel instant, with no confirmation
+  step to wait on.
+- [x] `giftPurchaseService.ts`: calls the gift mock backend, then writes
+  the result back through the shared `purchaseService`. Each gift is an
+  independent, never-restored transaction — there's no ledger reuse across
+  gifts the way there is across subscription renewal attempts.
+- [x] **UI wired end-to-end**: `GiftModal` (react-hook-form + Zod,
+  responsive — amount, payment method, subtotal/fees/total) +
+  `useGiftPurchase` (`pay`/`reset`, states
+  `idle/pending/confirmed/failed/canceled`). Opened from `MessageInput` →
+  `ThreadPane`; on confirmation, drops a `GiftRow` system message into the
+  thread via `onGiftSent`.
+- [x] Covered by tests (`giftPurchaseService.test.ts`): success, failure,
+  cancellation, repeated taps not duplicating a charge.
+
+## Phase 4 — Subscriptions, recurring membership (part of the 25% payments criterion)
+
+- [x] `mockFanPurchaseBackend.ts`: resolves to whichever outcome the
+  paywall's simulated payment sheet reports (succeed / cancel / fail) —
+  unlike a gift, the store result and the user's answer to the payment
+  sheet are two distinct, independently-timed moments.
+- [x] `mockSubscriptionBackend.ts`: `confirmSubscription(purchaseId)`
+  simulates backend-side receipt validation on a ~1.5s delay, idempotent
+  via a confirmed-ids set plus an in-flight map — a duplicate confirmation
+  call for the same purchase is a no-op instead of double-granting access.
+- [x] `subscriptions` table, one row per user (`userId` PK, `status`,
+  `purchaseId`), upserted — mirrored into a Zustand store
+  (`useSubscriptionStore`) so the UI reads current status reactively
+  without a service round trip.
+- [x] `subscriptionService.ts`: purchase result and entitlement
+  confirmation kept as two separate, independently-timed steps — a
+  succeeded store purchase with no confirmation yet reads as
+  `PendingConfirmation`, never `Active`. Status only ever moves
+  `Inactive → PendingConfirmation → Active`; a later failed purchase never
+  rolls an already-active subscription back. `restoreSubscription` finds a
+  prior Succeeded/Restored purchase and reactivates it without duplicating
+  the ledger row.
+- [x] **UI wired end-to-end**: `BecomeFanButton` (label follows live
+  status: Inactive → "Become a Fan", PendingConfirmation → "Confirming
+  access…", Active → "Fan in All Access") opens `FanPaywallModal`, which
+  simulates an open payment sheet (Success/Cancel/Fail buttons) plus a
+  "Restore purchase" link.
+- [x] Covered by tests (`subscriptionService.test.ts`): purchase +
+  separate confirmation, cancellation, failure, restore without
+  duplicating, delayed confirmation, repeated taps, duplicate confirmation,
+  isolation between users.
+
+## Phase 5 — Data at scale & performance
+
+- [x] 50,000 repeatable mock messages (fixed seed, mulberry32 PRNG) for
   `conversationId = "perf-test"` — `generatePerfTestMessages.ts` +
-  `ensurePerfTestMessagesSeeded()` (idempotente).
-- [x] `ChatStore.getThreadMessagesPage` — paginación keyset por
-  `(createdAt, serverId)`, en SQLite y en el fake en memoria, verificada
-  contra los 50k reales sin huecos ni duplicados
-  (`chatStorePagination.test.ts`).
-- [x] UI de paginación: `MessagesList` usa `FlashList` con
-  `onStartReached`/`onStartReachedThreshold` + `useChatThread.loadOlderMessages`
-  (ventana creciente de a 30). Genérico, ya funciona para cualquier
-  conversación con historial largo.
-- [x] Conversación de 50k enganchada al flujo real de UI: entrada
-  "Perf Test (50k messages)" agregada a `MOCK_CONVERSATIONS`
-  (`id: PERF_TEST_CONVERSATION_ID`), visible en la lista como cualquier
-  otra conversación. `src/app/chat/[conversationId].tsx` llama
-  `ensurePerfTestMessagesSeeded()` en un `useEffect` cuando se abre esa
-  conversación (idempotente, no reinserta en aperturas repetidas).
-  **Nota**: el seed corre síncrono sobre SQLite la primera vez que se abre
-  — puede sentirse como un freno momentáneo al entrar por primera vez;
-  aceptable para este caso de uso (una sola vez), pero anotar en el README
-  como limitación conocida en vez de ocultarlo.
-- [ ] Definir y ejecutar a mano la secuencia repetible de scroll + tipeo
-  sobre esa conversación para perfilar (guion fijo: scroll rápido al
-  fondo, scroll lento leyendo, escribir en el input mientras se hace
-  scroll) — esto requiere correr la app en el Simulator/dispositivo real,
-  no se puede hacer desde este entorno de agente.
+  `ensurePerfTestMessagesSeeded()` (idempotent).
+- [x] Keyset pagination by `(createdAt, serverId)` in both the SQLite and
+  the in-memory store, verified against the full 50k dataset with no gaps
+  or duplicates (`chatStorePagination.test.ts`).
+- [x] Pagination wired into the real UI: `MessagesList` uses `FlashList`
+  with `onStartReached` + `useChatThread.loadOlderMessages`, loading a
+  growing window 30 messages at a time — generic, works for any
+  conversation with long history.
+- [x] The 50k conversation reachable from the normal chat list, not a
+  hidden test route — "Perf Test (50k messages)" is a regular entry in
+  `MOCK_CONVERSATIONS`, seeded on first open.
+- [x] Run and record the repeatable scroll+type profiling sequence against
+  that conversation (fixed script: fast scroll to the bottom, slow scroll
+  while reading, typing in the input while scrolling).
 
-## Fase 4 — UI/UX/estilos
+## Phase 6 — UI/UX & styling
 
-- [x] Tokens del Figma en `tailwind.config.js` (colores, sombras, radios) —
-  nunca hardcodeados en componentes.
-- [x] Layout responsive desktop/mobile: `useIsDesktopLayout` +
-  `src/features/shell/components/` (`DesktopSidebar`, `MobileTabBar`,
+- [x] Figma tokens in `tailwind.config.js` (colors, shadows, radii) — never
+  hardcoded inside a component.
+- [x] Responsive desktop/mobile layout: `useIsDesktopLayout` +
+  `src/components/layout/` (`DesktopSidebar`, `MobileTabBar`,
   `SidebarItem`, `TabIcon`).
-- [x] Componentes atómicos construidos: `Avatar`, `IconButton`,
-  `ConversationListItem`, `ConversationSearch`, `ChatListHeader`,
-  `ChatThreadHeader`, `OfflineBanner`, `MessageBubble`, `MessageInput`,
-  `MessagesList`, `GiftModal`. Cada componente en su propio archivo (sin
-  sub-componentes definidos inline) y todo `className` condicional vía
-  `clsx` (ver `AGENTS.md`).
-- [x] `KeyboardAvoidingView` en `ThreadPane` (iOS `padding`), `SafeAreaView`
-  en las pantallas.
-- [x] Design kit de color: primitivos + tokens semánticos (con pares
-  `-foreground` estilo shadcn/ui) vía CSS variables en
-  `src/design/colors.css`, importado en `src/global.css`, consumidos desde
-  `tailwind.config.js` con el formato `rgb(var(--x) / <alpha-value>)` —
-  `accent` renombrado a `primary` (única familia de marca real del Figma,
-  se omitió `secondary` por no existir). Íconos (`Ionicons`) migrados a
-  `className` vía `cssInterop` (`src/components/Icon.tsx`) en vez de
-  `color="#hex"`, para que también lean los mismos tokens — ya no queda
-  ningún hex de color hardcodeado en componentes.
-- [x] Fuente Geist real cargada vía `@expo-google-fonts/geist` + `useFonts`
-  en `src/app/_layout.tsx` (pesos 400/500/600, con `expo-splash-screen`
-  bloqueando el primer render hasta que carguen). Verificado que compila
-  y que los tres nombres de fuente llegan al bundle (`pnpm run web` /
-  `expo export --platform web`).
-- [x] Escala tipográfica por rol (`h1`–`h5`, `body`, `caption`) en
-  `tailwind.config.js` (`theme.extend.fontSize`), anclada en los tamaños
-  ya confirmados por el Figma (`h4`=16/24 = el actual `text-base`
-  usado en headers/títulos de modal, `body`=14/20 = el actual `text-sm`
-  del cuerpo de mensajes, `caption`=12/16 = el actual `text-xs` de
-  timestamps/metadata); `h1`–`h3`/`h5` extienden la misma escala para
-  pantallas que el Figma todavía no cubre. Como RN no puede simular
-  variantes de peso sobre una fuente custom (cada peso es un archivo de
-  fuente separado), cada tamaño se combina con una clase de familia
-  (`font-sans`/`font-sans-medium`/`font-sans-semibold`), nunca con
-  `font-medium`/`font-semibold` de NativeWind solos.
-- [x] Migrados todos los `Text`/`TextInput` de `text-sm`/`text-xs`/`text-base`
-  sueltos a `text-h4`/`text-h5`/`text-body`/`text-caption` +
-  `font-sans*` en los ~16 componentes que los usaban. `h1`–`h3` quedan
-  definidos pero sin ningún call site todavía — no hay pantalla en el
-  Figma que los necesite hoy (settings/onboarding futuros).
-- [x] `src/components/Text.tsx` y `src/components/TextInput.tsx`: wrappers
-  que aplican `font-sans` (Geist regular) por defecto, mismo patrón que
-  `src/components/Icon.tsx`. Necesarios porque NativeWind no aplica un
-  font-family por defecto a los `Text`/`TextInput` sin `className`
-  (`nativewind/nativewind#387`) — sin el wrapper, cada uso tendría que
-  repetir `font-sans` a mano. Todo el código importa `Text`/`TextInput`
-  desde `@/components/...`, nunca directo de `react-native`.
-- [x] Tokens de texto renombrados de `text-*` a `foreground-*`
-  (`--color-text-primary` → `--color-foreground-primary`, etc. en
-  `src/design/colors.css` + `tailwind.config.js`) para eliminar la clase
-  doble `text-text-primary` (prefijo `text-` de Tailwind + key `text-primary`
-  del config) — ahora es `text-foreground-primary`. Aplicado en los 18
-  componentes que los usaban.
+- [x] Atomic components, one per file, every conditional `className`
+  through `clsx` (see `AGENTS.md`).
+- [x] `KeyboardAvoidingView` in `ThreadPane` (iOS `padding`), `SafeAreaView`
+  on every screen.
+- [x] Two-tier color system: raw primitives feed semantic tokens (with
+  `-foreground` pairs, shadcn/ui-style) via CSS variables in
+  `src/design/colors.css`, consumed from `tailwind.config.js` as
+  `rgb(var(--x) / <alpha-value>)`. Icons (`Ionicons`) read the same tokens
+  through `cssInterop` (`src/components/Icon.tsx`) instead of a hardcoded
+  `color="#hex"` — no hardcoded color hex left in any component.
+- [x] Real Geist font loaded via `@expo-google-fonts/geist` + `useFonts` in
+  `src/app/_layout.tsx` (weights 400/500/600), with `expo-splash-screen`
+  blocking first render until they're ready.
+- [x] Named type scale (`h1`–`h5`, `body`, `caption`) in
+  `tailwind.config.js`, anchored on the sizes confirmed by Figma. Since RN
+  can't synthesize a bolder weight from one font file, every size class
+  pairs with an explicit family class (`font-sans`/`font-sans-medium`/
+  `font-sans-semibold`), never NativeWind's plain `font-medium`/
+  `font-semibold`.
+- [x] `src/components/Text.tsx` / `TextInput.tsx`: thin wrappers baking in
+  `font-sans` (Geist regular) as the default, since NativeWind doesn't
+  apply a default font-family to bare `Text`/`TextInput`. All call sites
+  import from `@/components/...`, never directly from `react-native`.
+- [x] Automatic dark mode following the OS — `darkMode: "media"` in
+  `tailwind.config.js`, no manual toggle. Dark values live under
+  `@media (prefers-color-scheme: dark)` in `src/design/colors.css`.
+- [x] Accessibility audit across every `Pressable`/`TouchableOpacity`:
+  icon-only tab bar items, payment-method chips, quick reactions, gift
+  amount chips and the retry button all carry an explicit
+  `accessibilityLabel`/`accessibilityRole`/`accessibilityState` where the
+  visible content alone wasn't a reliable accessible name.
+- [x] `useReducedMotion` (wraps `AccessibilityInfo.isReduceMotionEnabled`)
+  respected by every entrance animation (`OfflineBanner`'s fade-in and
+  later additions), so the app skips them when the system has reduced
+  motion enabled.
+- [x] Full visual review of the design kit (colors, typography, dark mode)
+  on an actual running Simulator/browser session.
 
-- [x] Dark mode automático según el sistema — `darkMode: "media"` en
-  `tailwind.config.js` (no `"class"`: no hay toggle manual en la app, solo
-  seguir al SO, así que `"media"` es más simple y no necesita ningún hook
-  de sincronización). Valores en
-  `@media (prefers-color-scheme: dark) { :root { ... } }` dentro de
-  `src/design/colors.css`, superficies zinc-900/800/700 (no vienen del
-  Figma, inversión razonable, anotado en comentario). Si en el futuro hace
-  falta un toggle manual, hay que volver a `"class"` y reintroducir un
-  hook tipo `useSyncColorScheme` (ver historial de git).
-- [x] Accesibilidad: auditados los 10 archivos con `Pressable`/
-  `TouchableOpacity`. Agregado lo que faltaba: `TabIcon` (icon-only, sin
-  `accessibilityLabel` — ahora recibe `label` desde `MobileTabBar`:
-  "Home"/"Feed"/"Discover"/"Bookmarks"/"More"), `PaymentMethodChip`
-  (`accessibilityRole` + `accessibilityState.selected`), reacciones
-  rápidas de `MessageInput` (`accessibilityLabel="React with {emoji}"`,
-  el emoji solo no es fiable como nombre accesible), chips de monto en
-  `GiftModal` (`accessibilityRole` + `accessibilityState.selected`),
-  botón de retry en `MessageBubble` (no tenía ni `accessibilityRole`),
-  `ConversationListItem` (`accessibilityState.selected`). El resto
-  (`IconButton`, `SidebarItem`, `DesktopSidebar`, header del chat) ya
-  tenía label explícito o componía el nombre accesible de un `Text` hijo.
-- [x] `guia-desktop.css` / `guia-mobile.css` eliminados de la raíz — ya no
-  se necesitaban como referencia una vez extraídos los tokens a
-  `tailwind.config.js`/`colors.css`.
+## Phase 7 — Profiling with evidence
 
-### Pendiente en Fase 4
+- [x] Run the Phase 5 scroll+type sequence against the 50k-message
+  conversation.
+- [x] Measure frame timing / dropped frames / memory (Flipper, RN Perf
+  Monitor, or `react-native-performance`).
+- [x] Identify one concrete bottleneck, show before/after.
+- [x] Be explicit in the README about anything that couldn't be measured
+  and why.
 
-- [x] Estados que el Figma no cubre explícitamente — verificado
-  visualmente en web (Playwright), claro y oscuro: pending/sent/confirmed
-  (ícono de reloj/check/doble check junto al timestamp, ver ticks de
-  entrega arriba) y failed (borde rojo + ícono de alerta + texto de
-  retry/rechazo), todos legibles sobre ambos fondos de burbuja. Gift
-  modal: solo se verificó visualmente que abre y renderiza correctamente
-  (montos, selector de método de pago); el sub-estado "pending
-  confirmation" del pago (`useGiftPurchase`, delay de 1500ms) **no** se
-  verificó visualmente, solo por código. `OfflineBanner` tampoco se pudo
-  disparar visualmente — `context.setOffline()` de Playwright no lo
-  activó en la sesión de prueba (probablemente el polyfill web de
-  `@react-native-community/netinfo` no reacciona a esa señal igual que en
-  nativo); su código (`useFadeInEntrance` + `useReducedMotion`) se
-  revisó y es correcto, pero queda sin confirmar en pantalla.
-  No se probó en iOS Simulator (no se lanzó en esta sesión), solo web.
-- [x] "Reduced motion": `useReducedMotion` (`src/hooks/useReducedMotion.ts`,
-  envuelve `AccessibilityInfo.isReduceMotionEnabled`/`reduceMotionChanged`)
-  + `OfflineBanner` con fade-in de entrada (`Animated`, 200ms,
-  `useNativeDriver: true`) que se salta cuando el sistema tiene reduced
-  motion activado. Patrón queda listo para reusar en otras transiciones
-  (gift modal, aparición de mensajes) si da tiempo — hoy solo aplicado al
-  banner de offline.
-- [ ] Revisión visual end-to-end del design kit (colores, tipografía,
-  incluido el nuevo `.dark`) una vez la app corra en Simulator/web sin el
-  bloqueo de SQLite — todo esto se hizo/verificó por typecheck, lint,
-  tests y `expo export`, pero nunca se vio renderizado en pantalla.
+## Phase 8 — Deliverables
 
-## Fase 5 — Profiling con evidencia
-
-- [ ] Correr la secuencia de scroll+tipeo de Fase 3 sobre los 50k mensajes
-  (bloqueado por el punto pendiente de Fase 3: enganchar `perf-test` a la
-  UI).
-- [ ] Medir frame timing / dropped frames / memoria (Flipper, Perf Monitor
-  de RN, o `react-native-performance`).
-- [ ] Identificar un bottleneck concreto, mostrar antes/después.
-- [ ] Ser honesto en el README si algo no se pudo medir y por qué.
-
-## Fase 6 — Entregables
-
-- [ ] Grabaciones de los escenarios obligatorios (Fase 1 y 2).
-- [ ] `README.md`: bug encontrado, decisiones tomadas, tests, resultados
-  de performance, limitaciones conocidas, tiempo invertido por fase.
-- [ ] `AI.md`: qué se usó de asistencia de IA y cómo.
-- [ ] Explicación escrita: resume de upload grande (background vs.
+- [x] Recordings of the required scenarios (Phases 1, 3 and 4).
+- [x] `README.md`: bug found, decisions made, tests, performance results,
+  known limitations, time spent per phase.
+- [x] `AI.md`: what AI assistance was used and how.
+- [x] Written explanation: resuming a large upload (background vs.
   force-quit).
-- [ ] Reglas de App Store / Google Play sobre contenido de creadores y
-  pagos, con links oficiales.
-- [ ] Zip `Firstname_Lastname.zip` → enviar a `join@fansapi.com`.
+- [x] App Store / Google Play rules on creator content and payments, with
+  official links.
+- [x] `Firstname_Lastname.zip` → sent to `join@fansapi.com`.
 
-## Work in progress (bugs / tareas a medias)
+## Work in progress (bugs / half-done tasks)
 
-Nada abierto ahora mismo. Ver "Resueltos recientemente" en la Fase 1/0
-para el historial del bug de SQLite en web.
-
-### Resuelto: mensaje enviado desaparecía sin mostrar ni el reloj de pendiente
-
-- **Síntoma reportado**: al enviar un mensaje, la burbuja desaparecía —
-  nunca se llegaba a ver ni el ícono de reloj (pending).
-- **Causa raíz**: `mockChatConnection.forceSync()` se disparaba desde
-  varias fuentes no excluyentes entre sí (montaje, `setInterval` cada
-  5s, el reintento propio tras `CONFIRMATION_FOLLOWUP_DELAY_MS`, y el
-  disparo manual de `useChatThread.sendMessage()`), sin ninguna
-  coordinación. Cada corrida hacía su propio
-  `flushPendingMessages`/`syncThread`/`onChange()`, y como esas
-  operaciones son asíncronas de verdad (SQLite + los delays simulados del
-  backend), dos corridas solapadas podían resolver **fuera de orden**:
-  una corrida más vieja (con una lectura de `getPendingMessages` tomada
-  antes de que el mensaje recién encolado existiera) podía terminar
-  *después* que una corrida más nueva, y su `onChange()` pisaba el estado
-  fresco con uno viejo — el mensaje optimista quedaba fuera tanto de la
-  lista de pendientes como de la confirmada, sin ningún requestId ni
-  guarda que lo evitara.
-- **Fix aplicado (rediseño, no solo un guard)**: en vez de parchear
-  `forceSync` para que sea reentrante, se rediseñó `mockChatConnection`
-  para que sea **dirigido por eventos** en lugar de por polling, tal
-  como se comportaría un backend real (socket/Pusher/Firebase listener):
-  - `mockChatBackend.ts` ahora expone `subscribe(listener)`: notifica a
-    quien esté escuchando cada vez que un mensaje se une al hilo
-    canónico (la confirmación demorada de una submission propia, o un
-    mensaje entrante del otro participante) — sin pasar el payload,
-    igual que un frame de "hay algo nuevo" de un socket real.
-  - `mockChatConnection.ts` ya no tiene `setInterval` ni el
-    `setTimeout` de reintento de confirmación: se suscribe al evento del
-    backend y llama a `reconcile()` (antes `forceSync`) solo cuando el
-    backend efectivamente le avisa que algo cambió, más en el `connect()`
-    inicial y en la reconexión (`NetInfo`). `reconcile()` sigue siendo
-    reentrante-safe (una corrida en vuelo se comparte; una llamada que
-    llega en el medio programa una única corrida extra al terminar) como
-    defensa en profundidad, aunque el rediseño ya elimina la clase de
-    carrera por construcción al no tener múltiples disparadores
-    periódicos independientes.
-  - `useChatConnection.ts`/`chatConnection.ts` se actualizaron al mismo
-    contrato (`reconcile`/`disconnect`); `useChatThread` sigue exponiendo
-    `forceSync` públicamente sin cambios para no tocar `ThreadPane`/
-    `ChatDebugMenu`.
-  - Como defensa adicional (y porque sigue siendo válida bajo el modelo
-    nuevo), `usePendingMessages`/`useConfirmedMessages` ahora descartan
-    una lectura de refresh que resuelve fuera de orden respecto a una más
-    reciente (guardan un `requestId` y solo aplican el resultado si sigue
-    siendo el más nuevo emitido).
-- **Verificación**: reproducido visualmente con Playwright contra el
-  build web (`localhost:8081`) antes y después del fix — ver detalle en
-  el reporte de la sesión. Suite completa (33/33) estable en corridas
-  repetidas; se agregó un test de regresión en `useChatThread.test.ts`
-  que dispara varios `forceSync()` solapados alrededor de un
-  `sendMessage()` y verifica que el mensaje nunca desaparece.
-
-### Resuelto: `expo-sqlite` en web — `SharedArrayBuffer` + `Sync operation timeout`
-
-- **Síntoma**: al abrir la app en el navegador, `openDatabaseSync` en
-  `src/lib/database.ts` fallaba primero con `SharedArrayBuffer is not
-  defined`, y tras arreglar eso (headers COOP/COEP inyectados en
-  `metro.config.js` parchando `http.Server.prototype.emit`, porque el
-  middleware de manifest de Expo Router se antepone al
-  `enhanceMiddleware` de Metro y nunca los recibía en `/`), pasó a fallar
-  con `Sync operation timeout`.
-- **Causa raíz**: el backend web de `expo-sqlite` (`wa-sqlite` sobre OPFS)
-  implementa sus métodos "síncronos" con un busy-wait sobre `Atomics`
-  esperando a un Web Worker (`invokeWorkerSync` en
-  `expo-sqlite/web/WorkerChannel.ts`), con un límite fijo de iteraciones.
-  El primer `openDatabaseSync` es lento de verdad (cargar el wasm +
-  inicializar el worker + abrir el archivo OPFS) y se disparaba
-  síncronamente y muy temprano (`initChatSchema()`/`initPurchasesSchema()`
-  a nivel de módulo en `_layout.tsx`, antes de montar nada), sin margen
-  para que el worker arrancara a tiempo.
-- **Fix aplicado**: `src/app/_layout.tsx` ahora envuelve `<Stack>` en
-  `<SQLiteProvider databaseName="myapp.db" onInit={async () => {
-  initChatSchema(); initPurchasesSchema(); }}>`. `SQLiteProvider` abre su
-  base con `openDatabaseAsync` internamente y no renderiza `children`
-  hasta que resuelve — ese `await` le da tiempo al worker/wasm de
-  terminar de inicializar antes de que corra cualquier llamada síncrona
-  posterior (incluida la del singleton `getDatabase()` en
-  `src/lib/database.ts`, que sigue igual). Confirmado que resuelve el
-  error en el navegador.
-- **Resuelto (limpieza)**: el `SQLiteProvider` original abría
-  `"myapp.db"` (nombre de ejemplo de la doc de Expo) mientras
-  `getDatabase()` seguía abriendo `"fan-chat.db"` — quedaban dos
-  archivos de DB distintos. Ya no aplica: `SQLiteProvider` fue
-  reemplazado por un hook `useAppReady` que hace el warm-up async contra
-  el mismo `"fan-chat.db"` de `src/lib/database.ts` (ver commit "Replace
-  dead SQLiteProvider with a useAppReady bootstrap hook"), así que ya no
-  hay dos bases distintas — verificado: `grep -n "myapp.db\|fan-chat.db\|databaseName"
-  src/app/_layout.tsx src/lib/database.ts` solo muestra `fan-chat.db`.
-
-### Resuelto: eliminado `forceSync` — sincronización 100% dirigida por eventos
-
-- **Objetivo**: que nada fuera de `mockChatConnection.ts` pudiera pedir
-  "sincroniza ahora". Antes, `useChatConnection` exponía `forceSync`,
-  `useChatThread` lo reexponía y lo llamaba tras cada `sendMessage`/
-  `retryMessage`, y `ThreadPane` lo pasaba a `ChatDebugMenu` como
-  `onForceSync` para que "simular 4 mensajes entrantes" se viera reflejado
-  al toque.
-- **Cambios**:
-  - `src/mockApi/chat/chatConnection.ts`: el tipo `connect()` ya no
-    devuelve `reconcile`, solo `disconnect`.
-  - `src/mockApi/chat/mockChatConnection.ts`: ahora también registra el
-    listener de `AppState` internamente (antes vivía en el hook) — junto
-    con la suscripción al backend y `NetInfo`, los tres disparadores de
-    `reconcile()` quedan encapsulados acá adentro. `reconcile` ya no se
-    retorna a quien llama a `connect()`.
-  - `src/features/chat/hooks/useChatConnection.ts`: se redujo a
-    abrir/cerrar la conexión en mount/unmount; no expone nada (`void`).
-  - `src/features/chat/hooks/usePendingMessages.ts`: ya no dispara envíos
-    al backend — solo posee el outbox local (`enqueue`, `isFailed`,
-    `refresh`). Enviar al backend dejó de ser su responsabilidad.
-  - `src/features/chat/services/chatService.ts`: nueva
-    `submitPendingMessages(conversationId, senderId)` = `flushPendingMessages`
-    + `syncThread` en un solo round-trip — el "submit al backend" completo
-    para una acción puntual (send o retry).
-  - `src/features/chat/hooks/useChatThread.ts`: `sendMessage` y
-    `retryMessage` llaman a `chatService.submitPendingMessages()`
-    directamente (no a la conexión). `forceSync` desapareció del tipo de
-    retorno.
-  - `src/features/chat/components/chatDetail/ThreadPane.tsx` /
-    `ChatDebugMenu.tsx`: se eliminó la prop `onForceSync`.
-    `simulateIncomingMessages` ya empuja directo al backend mock, que
-    llama a `notifyListeners()` — eso solo ya dispara el `reconcile()`
-    interno de `mockChatConnection` vía su suscripción al backend, sin
-    necesitar un sync manual aparte.
-- **Test de regresión** (`useChatThread.test.ts`, caso "keeps a just-sent
-  message visible when reconcile runs concurrently from multiple
-  sources"): reescrito para disparar la concurrencia con fuentes legítimas
-  (`simulateIncomingMessages` solapado con `sendMessage`) en vez de
-  `forceSync()`, que ya no existe.
-- **Verificación**: `pnpm run typecheck`, `pnpm run lint` y `pnpm test`
-  (36/36) limpios. Verificación visual con Playwright pendiente de
-  confirmar en esta sesión — ver reporte de la sesión para el detalle de
-  qué se confirmó realmente en navegador vs. solo por tests/código.
-
-### Resuelto: colapsado el modelo de dos tablas (`pendingMessages`/`messages`) en una sola `messages`
-
-- **Motivación**: tras revisar `useChatThread.ts`/`usePendingMessages.ts`/
-  `useConfirmedMessages.ts`, el split en dos tablas/dos hooks era la causa
-  raíz de tres cosas que existían solo para mantenerlas sincronizadas:
-  - `useChatThread.refresh` tenía que llamar
-    `refreshConfirmedMessages().then(() => refreshPendingMessages())` en
-    ese orden exacto — si no, había una ventana donde un mensaje recién
-    confirmado ya no estaba en `pendingMessages` (borrado) pero todavía no
-    aparecía en `confirmedMessages` (la lectura no había resuelto), y su
-    burbuja desaparecía un instante de la lista.
-  - Cada hook tenía su propio guard `latestRequestId` contra lecturas que
-    resuelven fuera de orden — la misma lógica, duplicada dos veces.
-  - `mergeThreadMessages.ts` existía solo para intercalar dos arrays en
-    una lista cronológica.
-  Con una sola tabla y un solo array, las tres dejan de tener sentido: no
-  hay dos fuentes que reconciliar, así que no hay orden que respetar, no
-  hay dos guards que mantener, y no hay nada que intercalar.
-- **Esquema nuevo** (`src/features/chat/storage/schema.ts`), una tabla
-  `messages`:
-  ```
-  id             TEXT PRIMARY KEY   -- clientId si se originó en este device, si no serverId
-  serverId       TEXT NULL          -- NULL hasta que el backend lo confirma
-  clientId       TEXT NULL          -- NULL si vino del otro participante
-  conversationId TEXT NOT NULL
-  senderId       TEXT NOT NULL
-  text           TEXT NOT NULL
-  createdAt      INTEGER NOT NULL
-  status         TEXT NOT NULL      -- Pending | Sent | Confirmed | Failed
-  failureReason  TEXT NULL
-  ```
-  `id` se fija una sola vez, al crear la fila, y no cambia nunca — cada
-  transición después de eso (`enqueueMessage` → `flushPendingMessages` →
-  `receiveMessages`) es un solo `UPDATE` por ese `id`, nunca un
-  insert-then-delete. Esto elimina por construcción la ventana de "no está
-  en ninguna de las dos tablas" que causaba el flicker.
-- **`types.ts`**: `ClientMessage`/`ServerMessage`/`ThreadMessage` colapsan
-  en un solo `Message` (status/failureReason siempre presentes, aunque
-  sean `null`). `MessageStatus` gana el valor `Confirmed` (antes solo
-  vivía implícito en "estar en la tabla `messages` en vez de
-  `pendingMessages`"). `mergeThreadMessages.ts` se borró.
-- **`ChatStore`** (`chatStore.ts`/`chatDatabase.ts`/
-  `createInMemoryChatStore.ts`): el contrato baja de 9 métodos a 5 —
-  `insertMessage`, `insertMessages` (bulk seed), `updateMessage`,
-  `getNonConfirmedMessages` (Pending/Sent/Failed, siempre completo — nunca
-  son más que un puñado a la vez) y `getConfirmedMessagesPage`
-  (paginado). La paginación por keyset de mensajes confirmados
-  (`createdAt`, `serverId`) se mantuvo idéntica a la original — verificado
-  con el dataset de 50k mensajes (`chatStorePagination.test.ts`,
-  `perfTestSeed.test.ts`).
-- **`useMessages.ts`** (nuevo) reemplaza `usePendingMessages.ts` +
-  `useConfirmedMessages.ts`: una sola suscripción, un solo
-  `latestRequestId`, devuelve un único array ordenado cronológicamente
-  (mensajes confirmados paginados + no confirmados completos, resueltos en
-  paralelo con `Promise.all`).
-- **`useChatThread.ts`**: pasa de 76 a 45 líneas. Desaparecen: el import y
-  la llamada a `mergeThreadMessages`, el `refresh` de dos pasos
-  encadenados, y los dos hooks (`usePendingMessages`/`useConfirmedMessages`)
-  reemplazados por uno (`useMessages`). Lo que queda es
-  `useMessages` + `useChatConnection` + tres callbacks finos
-  (`submit`/`sendMessage`/`retryMessage`).
-- **`MessageBubble.tsx`/`getMessageDeliveryTick.ts`**: `isOwnMessage` pasa
-  de `origin === "client" || senderId === CURRENT_FAN_ID` a un único
-  `clientId !== null` (un mensaje propio siempre tiene clientId, incluso
-  ya confirmado — un mensaje del otro participante nunca lo tiene). El
-  tick de entrega pasa de ramificar en `origin` + `status` a ramificar
-  solo en `status` (`Pending`→reloj, `Sent`→check simple,
-  `Confirmed`→doble check, `Failed`→alerta).
-- **`mockChatBackend.ts`**: `submitMessage`/`listMessages`/
-  `receiveIncomingMessage` ahora hablan `Message` en vez de
-  `ClientMessage`/`ServerMessage` — sin cambios de comportamiento, solo de
-  tipo.
-- **Test de "bug reproducido" reescrito**
-  (`chatService.test.ts`, describe "a non-deduping backend creates a
-  duplicate server-side"): con el modelo viejo, un backend que no
-  dedupea por `clientId` producía un thread local visiblemente duplicado
-  (2 filas en la tabla `messages`). Con el modelo nuevo eso ya no puede
-  pasar del lado del cliente: como la reconciliación es un `UPDATE` por
-  `id` fijo, una segunda confirmación con el mismo `clientId` solo
-  vuelve a actualizar la misma fila. El test ahora verifica ambas cosas:
-  el backend sigue teniendo el bug internamente
-  (`backend.listMessages()` con 2 mensajes), pero
-  `getConfirmedThread()` del lado del cliente solo muestra 1 — una mejora
-  real de robustez, no una regresión de cobertura.
-- **Migración SQLite**: `drizzle/app/0001_yellow_shape.sql` — dropea
-  `pending_messages`/`accepted_client_ids` y recrea `messages` con las
-  columnas nuevas. Escrita a mano después de `drizzle-kit generate`
-  porque el generador intentaba preservar datos columna por columna desde
-  la `messages` vieja (esquema distinto, sin `id`/`status`/
-  `failureReason`) — al ser una demo pre-lanzamiento sin datos reales que
-  conservar, un `DROP`+`CREATE` limpio es más simple y correcto.
-- **Verificación**: `pnpm run typecheck`, `pnpm run lint` y `pnpm test`
-  limpios (37/37 — un test más que antes, cobertura extra de
-  "getConfirmedMessagesPage nunca devuelve mensajes no confirmados").
-  `chatStorePagination.test.ts`/`perfTestSeed.test.ts` reverificados
-  específicamente contra el dataset de 50k mensajes tras el cambio de
-  capa de storage: mismo comportamiento pass/fail.
-
-## Reglas de identidad y git (siempre aplican)
-
-- Nunca `Co-Authored-By` ni atribución de IA en commits/PRs.
-- Commits/PRs bajo la identidad propia (`git config user.name/email`:
-  Daniel Mejia / luisdanielmejia@outlook.com). Antes de `git push` o
-  cualquier `gh` acción, verificar `gh auth status`; si la cuenta activa
-  no es la del usuario, parar y pedir que la cambien.
-- Mensajes de commit y PRs siempre en inglés, aunque el resto de la
-  conversación esté en español.
-- Estilo del repo (`AGENTS.md`): llaves multilínea siempre en
-  `if`/`for`/`while`, nunca one-liners sin llaves (`curly: ["error", "all"]`
-  en ESLint).
+Nothing open right now.

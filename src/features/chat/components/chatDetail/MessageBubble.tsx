@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Pressable, View } from "react-native";
 import { clsx } from "clsx";
 import { format } from "date-fns";
@@ -18,7 +19,7 @@ interface MessageBubbleProps {
   participantTint: string;
 }
 
-export function MessageBubble({
+function MessageBubbleComponent({
   message,
   onRetry,
   participantName,
@@ -80,5 +81,19 @@ export function MessageBubble({
         </Text>
       )}
     </View>
+  );
+}
+
+export const MessageBubble = memo(MessageBubbleComponent, arePropsEqual);
+
+function arePropsEqual(previous: MessageBubbleProps, next: MessageBubbleProps) {
+  return (
+    previous.message.id === next.message.id &&
+    previous.message.text === next.message.text &&
+    previous.message.status === next.message.status &&
+    previous.message.failureReason === next.message.failureReason &&
+    previous.onRetry === next.onRetry &&
+    previous.participantName === next.participantName &&
+    previous.participantTint === next.participantTint
   );
 }
