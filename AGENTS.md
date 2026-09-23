@@ -5,6 +5,14 @@ Stack: Expo (React Native) + TypeScript (strict) + Expo Router (routes under
 
 ## Code conventions
 
+- **Prefer the simplest solution that works.** Before reaching for a new
+  abstraction, a generic helper, an extra layer of indirection, or a
+  broader refactor, ask whether the direct, obvious version already
+  solves the problem — most of the time it does. Over-engineering
+  (speculative generality, unnecessary abstractions, indirection that
+  doesn't pay for itself) is a defect, not a virtue: it makes code harder
+  to read, review, and change. Clean code is the least code the problem
+  actually requires, not the most flexible code imaginable.
 - **Variable names are always descriptive** — never a single letter or
   context-less (`e`, `el`, `li`, `i`, `s`, `d`...). Name things for what
   they hold (`event`, `element`, `index`...), even in small callbacks
@@ -275,3 +283,14 @@ components.
   `gh auth status` — if the active account isn't the user's, stop and ask
   them to switch it instead of proceeding.
 - **Commit messages and PR titles/descriptions are always in English.**
+
+## Code review
+
+Anyone reviewing code — human or agent — treats **simplicity** as a
+first-class review criterion, on par with correctness and convention
+compliance. Flag over-engineered code the same way you'd flag a bug: an
+unnecessary abstraction, a generic layer built for a hypothetical future
+need, or indirection that doesn't earn its keep is a finding to raise,
+not a stylistic nitpick to skip. When suggesting a fix, prefer the
+simplest change that resolves the issue over the most "complete" or
+extensible one.
