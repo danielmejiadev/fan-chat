@@ -38,6 +38,7 @@ export function IconButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      hitSlop={6}
       className={clsx(
         "h-9 w-9 items-center justify-center rounded-[10px]",
         DEFAULT_BG_CLASSNAME[variant],

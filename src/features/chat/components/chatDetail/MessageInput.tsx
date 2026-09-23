@@ -38,6 +38,7 @@ export function MessageInput({ onSend, onOpenGift, onFocus }: MessageInputProps)
               onPress={() => setDraftText((currentDraft) => `${currentDraft}${emoji}`)}
               accessibilityRole="button"
               accessibilityLabel={`React with ${emoji}`}
+              hitSlop={6}
               className="h-8 w-8 items-center justify-center rounded-full"
             >
               <Text>{emoji}</Text>
