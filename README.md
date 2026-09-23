@@ -116,12 +116,24 @@ Interactive diagram: https://claude.ai/artifact/2P2MKsg49pMUmZPbVY9Cf1
     variant).
   - No manual in-app toggle — switches instantly when the OS setting
     changes, no app restart needed.
-- **Demo controls** (always visible, every build — see "Demo controls"
-  below for the full list)
-  - `ChatDebugMenu` — force chat failure modes, go offline, simulate
-    incoming messages, clear subscription access, all on demand.
-  - `DemoResetButton` — wipe all local data and start a recording from a
-    clean, reseeded state.
+- **`ChatDebugMenu`** (always visible, every build, floating bug icon in
+  a chat thread — see "Demo controls" below for the why)
+  - "Go offline" / "Go back online" — forces sends to queue instead of
+    reaching the backend, and reconnects/flushes the queue on toggle
+    back.
+  - "Drop next response" — the next send is accepted but never confirmed,
+    to test retry-without-duplicate.
+  - "Reject next message (non-recoverable)" — the next send is refused
+    outright, no retry offered.
+  - "Simulate 4 incoming messages" — pushes 4 canned messages from the
+    other participant, meant to pair with "Go offline".
+  - "Clear subscription access" — simulates a reinstall, so "Restore
+    purchase" has something to find.
+- **`DemoResetButton`** (always visible, sidebar on desktop / floating
+  button on mobile) — wipes every chat/purchase/subscription table,
+  resets every in-memory mock backend, and navigates back to the
+  conversation list, so each recording starts from a clean, reseeded
+  state.
 - **Responsive desktop/mobile layout**
   - `DesktopSidebar` + multi-column view on wide screens.
   - `MobileTabBar` + full-screen view on narrow screens.
