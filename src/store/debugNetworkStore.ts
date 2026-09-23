@@ -22,31 +22,94 @@ type DebugNetworkStore = {
   setForcedOffline: (value: boolean) => void;
 };
 
-let databasePromise: Promise<SQLiteDatabase> | null = null;
+/**
+ * The same typed store contract every other feature's storage/ uses —
+ * SQLite for the real app, an in-memory double for Jest, which can't load
+ * expo-sqlite's native module. Without this, any test that reaches
+ * flushPendingMessages() (which always awaits waitForDebugNetworkHydration())
+ * would crash trying to open a real database, regardless of which chat/
+ * purchase store it already injected.
+ */
+type DebugSettingsStore = {
+  getForcedOffline: () => Promise<boolean | null>;
+  setForcedOffline: (value: boolean) => Promise<void>;
+};
 
-async function getDebugSettingsDatabase(): Promise<SQLiteDatabase> {
-  databasePromise ??= (async () => {
-    const database = await openDatabaseAsync("fan-chat.db");
-    await database.execAsync(
-      "CREATE TABLE IF NOT EXISTS debug_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)",
-    );
+function createSqliteDebugSettingsStore(): DebugSettingsStore {
+  let databasePromise: Promise<SQLiteDatabase> | null = null;
 
-    return database;
-  })();
+  async function getDatabase(): Promise<SQLiteDatabase> {
+    databasePromise ??= (async () => {
+      const database = await openDatabaseAsync("fan-chat.db");
+      await database.execAsync(
+        "CREATE TABLE IF NOT EXISTS debug_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)",
+      );
 
-  return databasePromise;
+      return database;
+    })();
+
+    return databasePromise;
+  }
+
+  return {
+    async getForcedOffline() {
+      const database = await getDatabase();
+      const row = await database.getFirstAsync<{ value: string }>(
+        "SELECT value FROM debug_settings WHERE key = ?",
+        [OFFLINE_KEY],
+      );
+
+      return row === null ? null : row.value === "1";
+    },
+    async setForcedOffline(value) {
+      const database = await getDatabase();
+      await database.runAsync(
+        "INSERT INTO debug_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        [OFFLINE_KEY, value ? "1" : "0"],
+      );
+    },
+  };
+}
+
+/** Test-only: no persistence, just an in-memory value — Jest can't load expo-sqlite's native module. */
+export function createInMemoryDebugSettingsStore(): DebugSettingsStore {
+  let storedValue: boolean | null = null;
+
+  return {
+    async getForcedOffline() {
+      return storedValue;
+    },
+    async setForcedOffline(value) {
+      storedValue = value;
+    },
+  };
+}
+
+let defaultStore: DebugSettingsStore | null = null;
+
+function resolveDebugSettingsStore(): DebugSettingsStore {
+  defaultStore ??= createSqliteDebugSettingsStore();
+
+  return defaultStore;
+}
+
+/** Test-only: forces the next resolveDebugSettingsStore() call to use this store instead of SQLite. */
+export function setDebugSettingsStoreForTests(store: DebugSettingsStore): void {
+  defaultStore = store;
+}
+
+/** Test-only: clears the cached store and in-memory state so each test starts from a fresh one. */
+export function resetDebugSettingsStore(): void {
+  defaultStore = null;
+  hydrationPromise = null;
+  useDebugNetworkStore.setState({ isForcedOffline: false });
 }
 
 export const useDebugNetworkStore = create<DebugNetworkStore>((set) => ({
   isForcedOffline: false,
   setForcedOffline: (value) => {
     set({ isForcedOffline: value });
-    void getDebugSettingsDatabase().then((database) =>
-      database.runAsync(
-        "INSERT INTO debug_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        [OFFLINE_KEY, value ? "1" : "0"],
-      ),
-    );
+    void resolveDebugSettingsStore().setForcedOffline(value);
   },
 }));
 
@@ -61,14 +124,10 @@ let hydrationPromise: Promise<void> | null = null;
  */
 export function waitForDebugNetworkHydration(): Promise<void> {
   hydrationPromise ??= (async () => {
-    const database = await getDebugSettingsDatabase();
-    const row = await database.getFirstAsync<{ value: string }>(
-      "SELECT value FROM debug_settings WHERE key = ?",
-      [OFFLINE_KEY],
-    );
+    const persistedValue = await resolveDebugSettingsStore().getForcedOffline();
 
-    if (row !== null) {
-      useDebugNetworkStore.setState({ isForcedOffline: row.value === "1" });
+    if (persistedValue !== null) {
+      useDebugNetworkStore.setState({ isForcedOffline: persistedValue });
     }
   })();
 

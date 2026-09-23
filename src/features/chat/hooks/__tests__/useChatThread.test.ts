@@ -12,6 +12,11 @@ import {
 import { useChatThread } from "@/features/chat/hooks/useChatThread";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import { MessageStatus, type Message } from "@/features/chat/types";
+import {
+  createInMemoryDebugSettingsStore,
+  resetDebugSettingsStore,
+  setDebugSettingsStoreForTests,
+} from "@/store/debugNetworkStore";
 
 // Deliberately not a MOCK_CONVERSATIONS id, so the registry's mock backend
 // starts with no seed messages and tests aren't coupled to fixture data.
@@ -22,10 +27,12 @@ describe("useChatThread", () => {
   beforeEach(() => {
     resetConversationBackends();
     setChatServiceStoreForTests(createInMemoryChatStore());
+    setDebugSettingsStoreForTests(createInMemoryDebugSettingsStore());
   });
 
   afterEach(() => {
     resetChatServiceStore();
+    resetDebugSettingsStore();
   });
 
   it("shows a sent message optimistically as soon as sendMessage is called", async () => {

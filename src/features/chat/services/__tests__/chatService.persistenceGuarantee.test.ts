@@ -12,6 +12,11 @@ import { createMockChatBackend } from "@/mockApi/chat/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import type { ChatStore } from "@/features/chat/storage/chatStore";
 import type { Message } from "@/features/chat/types";
+import {
+  createInMemoryDebugSettingsStore,
+  resetDebugSettingsStore,
+  setDebugSettingsStoreForTests,
+} from "@/store/debugNetworkStore";
 
 /**
  * expo-sqlite is a native module — Jest runs in Node and cannot execute it —
@@ -54,10 +59,12 @@ const senderId = "fan-1";
 
 beforeEach(() => {
   resetConversationBackends();
+  setDebugSettingsStoreForTests(createInMemoryDebugSettingsStore());
 });
 
 afterEach(() => {
   resetChatServiceStore();
+  resetDebugSettingsStore();
 });
 
 describe("chatService persistence guarantee (precondition for force-quit recovery)", () => {

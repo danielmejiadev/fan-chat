@@ -21,6 +21,11 @@ import {
 } from "@/mockApi/chat/mockChatBackend";
 import { createInMemoryChatStore } from "@/features/chat/storage/createInMemoryChatStore";
 import { MessageStatus, type Message } from "@/features/chat/types";
+import {
+  createInMemoryDebugSettingsStore,
+  resetDebugSettingsStore,
+  setDebugSettingsStoreForTests,
+} from "@/store/debugNetworkStore";
 
 /**
  * Wraps a MockChatBackend so the first submission for each listed id
@@ -55,10 +60,12 @@ beforeEach(() => {
   jest.useFakeTimers();
   resetConversationBackends();
   setChatServiceStoreForTests(createInMemoryChatStore());
+  setDebugSettingsStoreForTests(createInMemoryDebugSettingsStore());
 });
 
 afterEach(() => {
   resetChatServiceStore();
+  resetDebugSettingsStore();
   jest.useRealTimers();
 });
 
